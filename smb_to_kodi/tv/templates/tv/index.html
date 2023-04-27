@@ -1,0 +1,44 @@
+{% include "./header.html" %}
+<div class="flex-container">
+    <div>
+        <h1>Libraries</h1>
+        {% if library_list %}
+            <ul>
+            {% for library in library_list %}
+               <li><a href="{% url 'tv:library' library.shortname %}">{{ library.path }}</a></li>
+            {% endfor %}
+            </ul>
+        {% else %}
+            <p>No libraries are available.</p>
+        {% endif %}
+    </div>
+    <div>
+        <form method="post">
+        {% csrf_token %}
+        <fieldset>
+            <legend><h1>Player</h1></legend>
+            <label for="player_address">Address:</label>
+            <input type="text" name="player_address" id="player_address" class="vTextField" maxlength="255" value="{{ current_player }}"><br/>
+        </fieldset>
+        <input type="submit" value="Submit" formaction="{% url 'tv:add_player' %}">
+        </form>
+    </div>
+    <div>
+        <form method="post">
+        {% csrf_token %}
+        <fieldset>
+            <legend><h1>Add Library</h1></legend>
+            <label for="path">Path:</label>
+            <input type="text" name="path" id="path" class="vTextField" maxlength="255"><br/>
+            <label for="prefix">Prefix:</label>
+            <input type="text" name="prefix" id="prefix" class="vTextField" maxlength="255"><br/>
+            <label for="servername">Servername:</label>
+            <input type="text" name="servername" id="servername" class="vTextField" maxlength="255"><br/>
+            <label for="shortname">Shortname:</label>
+            <input type="text" name="shortname" id="shortname" class="vTextField" maxlength="255">
+        </fieldset>
+        <input type="submit" value="Submit" formaction="{% url 'tv:add_library' %}">
+        </form>
+    </div>
+</div>
+{% include "./footer.html" %}

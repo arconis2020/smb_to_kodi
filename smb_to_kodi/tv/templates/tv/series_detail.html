@@ -1,0 +1,63 @@
+<h1>{{ series_name }}</h1>
+<a href="{% url 'tv:library' shortname %}">Back to Series List</a>
+<form method="post">
+{% csrf_token %}
+<fieldset>
+    <legend><h2>Next Episode</h2></legend>
+    <p>{{ next_episode.basename }}</p>
+    <input type="hidden" name="smb_path" id="next" value="{{ next_episode }}">
+</fieldset>
+<input type="submit" value="Play" formaction="{% url 'tv:play' shortname=shortname series=series_name %}" >
+<input type="submit" value="Mark as watched" formaction="{% url 'tv:watched' shortname=shortname series=series_name %}">
+</form>
+<form method="post">
+{% csrf_token %}
+<fieldset>
+    <legend><h2>Random Episode</h2></legend>
+    <p>{{ random_episode.basename }}</p>
+    <input type="hidden" name="smb_path" id="next" value="{{ random_episode }}">
+</fieldset>
+<input type="submit" value="Play" formaction="{% url 'tv:play' shortname=shortname series=series_name %}">
+<input type="submit" value="Mark as watched" formaction="{% url 'tv:watched' shortname=shortname series=series_name %}">
+</form>
+<form method="post">
+{% csrf_token %}
+<fieldset>
+    <legend><h2>Selected Episode</h2></legend>
+    <label for="selected">Choose an episode:</label>
+    <select name="smb_path" id="selected">
+    {% for ep in eplist %}
+        <option value="{{ ep.smb_path }}">{{ ep.basename }}</option>
+    {% endfor %}
+    </select>
+</fieldset>
+<input type="submit" value="Play" formaction="{% url 'tv:play' shortname=shortname series=series_name %}">
+<input type="submit" value="Mark watched up to" formaction="{% url 'tv:mark_watched_up_to' shortname=shortname series=series_name %}">
+<form method="post">
+{% csrf_token %}
+<fieldset>
+    <legend><h2>All Episodes</h2></legend>
+    <input type="radio" name="action" id="load_all" value="load_all">
+    <label for="load_all">Sync episode list with disk (no changes to watched marks).</label><br/>
+    <input type="radio" name="action" id="mark_unwatched" value="mark_unwatched">
+    <label for="mark_unwatched">Mark all episodes unwatched.</label><br/>
+    <input type="radio" name="action" id="delete_series" value="delete_series">
+    <label for="delete_series">Delete series from database (does not touch disk).</label>
+</fieldset>
+<input type="submit" value="Submit" formaction="{% url 'tv:manage_all_episodes' shortname=shortname series=series_name %}">
+</form>
+<form method="post">
+{% csrf_token %}
+<fieldset>
+    <legend><h2>Kodi Control</h2></legend>
+    <input type="radio" name="action" id="subsOff" value="subsOff">
+    <label for="subsOff">Turn off subtitles.</label><br/>
+    <input type="radio" name="action" id="subsOn" value="subsOn">
+    <label for="subsOn">Turn on subtitles.</label><br/>
+    <input type="radio" name="action" id="nextItem" value="nextItem">
+    <label for="nextItem">Advance to the next playlist item.</label><br/>
+    <input type="radio" name="action" id="nextStream" value="nextStream">
+    <label for="nextStream">Switch to the next audio stream.</label><br/>
+</fieldset>
+<input type="submit" value="Submit" formaction="{% url 'tv:kodi_control' shortname=shortname series=series_name %}">
+</form>
