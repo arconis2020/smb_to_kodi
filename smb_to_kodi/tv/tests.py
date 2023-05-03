@@ -1,12 +1,47 @@
+"""All unit tests for the tv app."""
 from django.test import TestCase
-import tempfile
+import black
 import os
+import pycodestyle
+import pydocstyle
+import tempfile
 
 
 from .models import Player, Library, Series, Episode
 
 
+class StylingAndFormattingTests(TestCase):
+    """Tests for the style and formatting guidelines in play for this project."""
+
+    def test_codestyle(self):
+        """Ensure compliance with PEP-8 (pycodestyle) at 120 characters."""
+        style = pycodestyle.StyleGuide(max_line_length=120)
+        result = style.check_files(".")
+        self.assertEqual(result.total_errors, 0, "Found PEP-8 errors, see above and fix.")
+
+    def test_black(self):
+        """Ensure that all files are compliant with Black formatting expectations."""
+        res = black.main(["-l", "120", "--check", "."], standalone_mode=False)
+        self.assertEqual(res, 0, "Found Black reformatting requirements, run 'black -l 120 .' to fix.")
+
+    def test_docstyle(self):
+        """Ensure compliance with PEP-257 (pydocstyle)."""
+        to_check = []
+        for root, dirs, files in os.walk("./tv"):
+            if "migrations" in root:
+                continue
+            for f in files:
+                fullpath = os.path.join(root, f)
+                if all([f.endswith(".py"), os.stat(fullpath).st_size > 0]):
+                    to_check.append(fullpath)
+        errors = [str(error) for error in pydocstyle.check(to_check)]
+        if errors:
+            raise ValueError("\n".join(errors))
+
+
 class PlayerModelTests(TestCase):
+    """Tests for the Player database model."""
+
     def test_player_replacement(self):
         """Ensure that providing the same primary key replaces the database entry instead of appending."""
         p1 = Player(pid=1, address="foo")
@@ -20,6 +55,8 @@ class PlayerModelTests(TestCase):
 
 
 class LibraryModelTests(TestCase):
+    """Tests for the Library database model."""
+
     @classmethod
     def setUpClass(cls):
         """Create a temporary directory structure with known contents for testing."""
@@ -29,7 +66,9 @@ class LibraryModelTests(TestCase):
         for x in range(10):
             this_td = tempfile.TemporaryDirectory(dir=cls.libdir.name)
             cls.dirnames.append(this_td)
-        cls.testlib = Library(path=cls.libdir.name, prefix=tempfile.gettempdir(), servername="localhost", shortname="testlib1")
+        cls.testlib = Library(
+            path=cls.libdir.name, prefix=tempfile.gettempdir(), servername="localhost", shortname="testlib1"
+        )
         cls.testlib.save()
 
     def test_string_rep(self):
@@ -59,6 +98,8 @@ class LibraryModelTests(TestCase):
 
 
 class SeriesModelTests(TestCase):
+    """Tests for the Series database model."""
+
     @classmethod
     def setUpClass(cls):
         """Create a temporary directory structure with known contents for testing."""
@@ -74,7 +115,9 @@ class SeriesModelTests(TestCase):
             # Now keep these files active until the teardown.
             cls.fnames.append(this_f)
             cls.fnames.append(this_nf)
-        cls.testlib = Library(path=cls.libdir.name, prefix=tempfile.gettempdir(), servername="localhost", shortname="testlib2")
+        cls.testlib = Library(
+            path=cls.libdir.name, prefix=tempfile.gettempdir(), servername="localhost", shortname="testlib2"
+        )
         cls.testlib.save()
         cls.testser = Series(series_name=os.path.basename(cls.seriesdir.name), library=cls.testlib)
         cls.testser.save()
@@ -97,13 +140,17 @@ class SeriesModelTests(TestCase):
 
 
 class EpisodeModelTests(TestCase):
+    """Tests for the Episode database model."""
+
     @classmethod
     def setUpClass(cls):
         """Create a temporary directory structure with known contents for testing."""
         super(EpisodeModelTests, cls).setUpClass()
         cls.libdir = tempfile.TemporaryDirectory()
         cls.seriesdir = tempfile.TemporaryDirectory(dir=cls.libdir.name)
-        cls.testlib = Library(path=cls.libdir.name, prefix=tempfile.gettempdir(), servername="localhost", shortname="testlib3")
+        cls.testlib = Library(
+            path=cls.libdir.name, prefix=tempfile.gettempdir(), servername="localhost", shortname="testlib3"
+        )
         cls.testlib.save()
         cls.testser = Series(series_name=os.path.basename(cls.seriesdir.name), library=cls.testlib)
         cls.testser.save()

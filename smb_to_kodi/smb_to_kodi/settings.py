@@ -20,12 +20,14 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # See https://docs.djangoproject.com/en/4.2/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = "django-insecure-#f8e&e@4tk0owzr2fn$0a&jpz0+b3tpue^r#en02t+cj)co5ew"
+with open("{0}/secret.key".format(BASE_DIR), "r") as df:
+    SECRET_KEY = df.read().strip()
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = False
 
-ALLOWED_HOSTS = []
+# Wildcard because this is running on a trusted network, and there's nothing sensitive.
+ALLOWED_HOSTS = ["*"]
 
 
 # Application definition
@@ -77,7 +79,7 @@ WSGI_APPLICATION = "smb_to_kodi.wsgi.application"
 DATABASES = {
     "default": {
         "ENGINE": "django.db.backends.sqlite3",
-        "NAME": BASE_DIR / "db.sqlite3",
+        "NAME": BASE_DIR / "db/db.sqlite3",
     }
 }
 
@@ -130,7 +132,7 @@ LOGGING = {
         "file": {
             "level": "DEBUG",
             "class": "logging.FileHandler",
-            "filename": "debug.log",
+            "filename": "logs/debug.log",
         },
     },
     "loggers": {

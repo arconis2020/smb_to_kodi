@@ -44,9 +44,7 @@ class Migration(migrations.Migration):
                 ),
                 (
                     "library",
-                    models.ForeignKey(
-                        on_delete=django.db.models.deletion.CASCADE, to="tv.library"
-                    ),
+                    models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, to="tv.library"),
                 ),
             ],
             options={
@@ -63,9 +61,7 @@ class Migration(migrations.Migration):
                 ("watched", models.BooleanField(default=False)),
                 (
                     "series",
-                    models.ForeignKey(
-                        on_delete=django.db.models.deletion.CASCADE, to="tv.series"
-                    ),
+                    models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, to="tv.series"),
                 ),
             ],
         ),
