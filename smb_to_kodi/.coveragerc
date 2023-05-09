@@ -2,5 +2,6 @@
 omit = 
     *__init__.py
     */migrations/*
+    *tests*
 [report]
 show_missing=true

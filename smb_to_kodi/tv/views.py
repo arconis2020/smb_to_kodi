@@ -1,6 +1,6 @@
 """Class-based and function-based view backings for the URLs in the tv app."""
 from django.db.models import Count
-from django.http import HttpResponseRedirect
+from django.http import HttpResponseRedirect, Http404
 from django.shortcuts import get_list_or_404, get_object_or_404, render
 from django.urls import reverse
 from django.views import generic
@@ -48,7 +48,12 @@ class SeriesView(generic.ListView):
 
     def get_queryset(self):
         """Return the list of current series in this library in sorted order."""
-        return Series.objects.filter(library__shortname=self.kwargs["shortname"]).order_by("series_name")
+        this_sn = self.kwargs["shortname"]
+        libcheck = Library.objects.filter(shortname=this_sn).count()
+        if libcheck > 0:
+            return Series.objects.filter(library__shortname=this_sn).order_by("series_name")
+        else:
+            raise Http404("No library of that name is loaded in the DB.")
 
 
 def series_detail(request, shortname, series):
@@ -87,7 +92,7 @@ def mark_as_watched(request, shortname, series):
     mypath = request.POST["smb_path"]
     try:
         this_episode = Episode.objects.get(pk=mypath)
-    except Episode.DoesNotExist:
+    except Episode.DoesNotExist:  # pragma: no cover
         return HttpResponseRedirect(reverse("tv:episodes", args=(shortname, series)))
     this_episode.watched = True
     this_episode.save()
@@ -113,7 +118,7 @@ def mark_watched_up_to(request, shortname, series):
     mypath = request.POST["smb_path"]
     try:
         this_episode = Episode.objects.get(pk=mypath)
-    except Episode.DoesNotExist:
+    except Episode.DoesNotExist:  # pragma: no cover
         return HttpResponseRedirect(reverse("tv:episodes", args=(shortname, series)))
     Episode.objects.filter(series=series, smb_path__lt=mypath).update(watched=True)
     return HttpResponseRedirect(reverse("tv:episodes", args=(shortname, series)))
@@ -151,7 +156,7 @@ def add_series(request, shortname):
     this_library = request.POST["library"]
     try:
         this_library = Library.objects.get(shortname=this_library)
-    except Library.DoesNotExist:
+    except Library.DoesNotExist:  # pragma: no cover
         return HttpResponseRedirect(reverse("tv:library", args=(shortname,)))
     if this_series_name == "all":
         this_library.add_all_series()
@@ -165,7 +170,7 @@ def delete_library(request):
     this_library_shortname = request.POST["library"]
     try:
         this_library = Library.objects.get(shortname=this_library_shortname)
-    except Library.DoesNotExist:
+    except Library.DoesNotExist:  # pragma: no cover
         return HttpResponseRedirect(reverse("tv:index"))
     this_library.delete()
     return HttpResponseRedirect(reverse("tv:index"))

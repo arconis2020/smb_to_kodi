@@ -1,5 +1,7 @@
 """All unit tests for the tv app."""
 from django.test import TestCase
+from django.urls import reverse
+from unittest.mock import call, patch
 import black
 import os
 import pycodestyle
@@ -8,6 +10,41 @@ import tempfile
 
 
 from .models import Player, Library, Series, Episode
+
+
+class DirectoryFactory:
+    """A reusable object to manage directory structures required for libraries/series/episodes."""
+
+    def __init__(self):
+        """Set up the lists."""
+        self.libdir = None
+        self.series = []
+        self.episodes = []
+
+    def create_library(self):
+        """Create a library structure."""
+        self.libdir = tempfile.TemporaryDirectory()
+
+    def create_series(self, num):
+        """Create a number of series structures."""
+        for x in range(num):
+            this_td = tempfile.TemporaryDirectory(dir=self.libdir.name)
+            self.series.append(this_td)
+
+    def create_episodes(self, num, dummy):
+        """Create a number of basically named episodes in the first available series."""
+        # Make sure that each episode has a numbered prefix in order of adding for sorting.
+        # Start at 11 to support more than 10 episodes in sort order.
+        prefixer = 11
+        for x in range(num):
+            # Should be seen by mimetypes as video
+            this_f = tempfile.NamedTemporaryFile(dir=self.series[0].name, suffix=".mkv", prefix=str(prefixer))
+            self.episodes.append(this_f)
+            if dummy:  # Test that mimetype filtering works
+                # Should be seen by mimetypes as None
+                this_nf = tempfile.NamedTemporaryFile(dir=self.series[0].name)
+                self.episodes.append(this_nf)
+            prefixer += 1
 
 
 class StylingAndFormattingTests(TestCase):
@@ -61,40 +98,32 @@ class LibraryModelTests(TestCase):
     def setUpClass(cls):
         """Create a temporary directory structure with known contents for testing."""
         super(LibraryModelTests, cls).setUpClass()
-        cls.libdir = tempfile.TemporaryDirectory()
-        cls.dirnames = []
-        for x in range(10):
-            this_td = tempfile.TemporaryDirectory(dir=cls.libdir.name)
-            cls.dirnames.append(this_td)
+        cls.dfac = DirectoryFactory()
+        cls.dfac.create_library()
+        cls.dfac.create_series(10)
+        cls.dfac.create_episodes(1, False)
         cls.testlib = Library(
-            path=cls.libdir.name, prefix=tempfile.gettempdir(), servername="localhost", shortname="testlib1"
+            path=cls.dfac.libdir.name, prefix=tempfile.gettempdir(), servername="localhost", shortname="testlib1"
         )
         cls.testlib.save()
 
     def test_string_rep(self):
         """Confirm string representation of Libraries."""
-        self.assertEqual(str(self.testlib), self.libdir.name)
+        self.assertEqual(str(self.testlib), self.dfac.libdir.name)
 
     def test_get_smb_path(self):
         """Confirm that the smb path is predictable."""
-        test_path = os.path.join(self.dirnames[0].name, "testfile")
+        test_path = self.dfac.episodes[0].name
         test_smb_path = self.testlib.get_smb_path(test_path)
         self.assertRegex(test_smb_path, "^smb://{0}".format(self.testlib.servername))
-        trailer = os.path.join(os.path.basename(self.dirnames[0].name), "testfile")
+        this_dir, this_file = os.path.split(test_path)
+        trailer = os.path.join(os.path.basename(this_dir), this_file)
         self.assertRegex(test_smb_path, "{0}$".format(trailer))
 
     def test_add_all_series(self):
         """Confirm that all folders are added as expected to the library."""
         self.testlib.add_all_series()
         self.assertEqual(Series.objects.filter(library=self.testlib).count(), 10)
-
-    @classmethod
-    def tearDownClass(cls):
-        """Clean up the temporary directory structure."""
-        super(LibraryModelTests, cls).tearDownClass()
-        for x in cls.dirnames:
-            x.cleanup()
-        cls.libdir.cleanup()
 
 
 class SeriesModelTests(TestCase):
@@ -104,39 +133,25 @@ class SeriesModelTests(TestCase):
     def setUpClass(cls):
         """Create a temporary directory structure with known contents for testing."""
         super(SeriesModelTests, cls).setUpClass()
-        cls.libdir = tempfile.TemporaryDirectory()
-        cls.seriesdir = tempfile.TemporaryDirectory(dir=cls.libdir.name)
-        cls.fnames = []
-        for x in range(10):
-            # Should be seen by mimetypes as video
-            this_f = tempfile.NamedTemporaryFile(dir=cls.seriesdir.name, suffix=".mkv")
-            # Should be seen by mimetypes as None
-            this_nf = tempfile.NamedTemporaryFile(dir=cls.seriesdir.name)
-            # Now keep these files active until the teardown.
-            cls.fnames.append(this_f)
-            cls.fnames.append(this_nf)
+        cls.dfac = DirectoryFactory()
+        cls.dfac.create_library()
+        cls.dfac.create_series(10)
+        cls.dfac.create_episodes(10, True)
         cls.testlib = Library(
-            path=cls.libdir.name, prefix=tempfile.gettempdir(), servername="localhost", shortname="testlib2"
+            path=cls.dfac.libdir.name, prefix=tempfile.gettempdir(), servername="localhost", shortname="testlib2"
         )
         cls.testlib.save()
-        cls.testser = Series(series_name=os.path.basename(cls.seriesdir.name), library=cls.testlib)
+        cls.testser = Series(series_name=os.path.basename(cls.dfac.series[0].name), library=cls.testlib)
         cls.testser.save()
 
     def test_string_rep(self):
         """Confirm string representation of Series."""
-        self.assertEqual(str(self.testser), os.path.basename(self.seriesdir.name))
+        self.assertEqual(str(self.testser), os.path.basename(self.dfac.series[0].name))
 
-    def test_add_all_series(self):
+    def test_add_all_episodes(self):
         """Confirm that all files are added as expected to the series."""
         self.testser.add_all_episodes()
         self.assertEqual(Episode.objects.filter(series=self.testser).count(), 10)
-
-    @classmethod
-    def tearDownClass(cls):
-        """Clean up the temporary directory structure."""
-        super(SeriesModelTests, cls).tearDownClass()
-        cls.seriesdir.cleanup()
-        cls.libdir.cleanup()
 
 
 class EpisodeModelTests(TestCase):
@@ -146,37 +161,236 @@ class EpisodeModelTests(TestCase):
     def setUpClass(cls):
         """Create a temporary directory structure with known contents for testing."""
         super(EpisodeModelTests, cls).setUpClass()
-        cls.libdir = tempfile.TemporaryDirectory()
-        cls.seriesdir = tempfile.TemporaryDirectory(dir=cls.libdir.name)
+        cls.dfac = DirectoryFactory()
+        cls.dfac.create_library()
+        cls.dfac.create_series(10)
+        cls.dfac.create_episodes(3, False)
         cls.testlib = Library(
-            path=cls.libdir.name, prefix=tempfile.gettempdir(), servername="localhost", shortname="testlib3"
+            path=cls.dfac.libdir.name, prefix=tempfile.gettempdir(), servername="localhost", shortname="testlib3"
         )
         cls.testlib.save()
-        cls.testser = Series(series_name=os.path.basename(cls.seriesdir.name), library=cls.testlib)
+        cls.testser = Series(series_name=os.path.basename(cls.dfac.series[0].name), library=cls.testlib)
         cls.testser.save()
-        cls.testep1 = Episode(series=cls.testser, smb_path="series/101.mkv", watched=False)
-        cls.testep1.save()
-        cls.testep2 = Episode(series=cls.testser, smb_path="series/102.mkv", watched=False)
-        cls.testep2.save()
-        cls.testep3 = Episode(series=cls.testser, smb_path="series/103.mkv", watched=False)
-        cls.testep3.save()
+        cls.testeps = []
+        for x in cls.dfac.episodes:
+            this_ep = Episode(series=cls.testser, smb_path=x.name, watched=False)
+            this_ep.save()
+            cls.testeps.append(this_ep)
 
     def test_string_rep(self):
         """Confirm string representation of Episodes."""
-        self.assertEqual(str(self.testep1), "series/101.mkv")
+        self.assertEqual(str(self.testeps[0]), self.dfac.episodes[0].name)
 
     def test_basename(self):
         """Confirm basename functionality."""
-        self.assertEqual(self.testep1.basename(), "101.mkv")
+        self.assertEqual(self.testeps[0].basename(), os.path.basename(self.dfac.episodes[0].name))
 
     def test_sort(self):
         """Confirm expected sorting of episodes."""
-        self.assertLess(self.testep1, self.testep2)
-        self.assertLess(self.testep2, self.testep3)
+        self.assertLess(self.testeps[0], self.testeps[1])
+        self.assertLess(self.testeps[1], self.testeps[2])
+
+
+class TvIndexViewTests(TestCase):
+    """Tests for the main Index view at /tv/."""
+
+    def test_section_presence(self):
+        """Confirm the presence of the three main sections of the index page."""
+        response = self.client.get(reverse("tv:index"))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Libraries")
+        self.assertContains(response, "Add Library")
+        self.assertContains(response, "Player")
+
+    def test_player_submission_and_display(self):
+        """Confirm that we can submit and then immediately see the player address."""
+        post_response = self.client.post(reverse("tv:add_player"), {"player_address": "foo"})
+        self.assertIn(post_response.status_code, [200, 302])
+        get_response = self.client.get(reverse("tv:index"))
+        self.assertIn(get_response.status_code, [200, 302])
+        self.assertContains(get_response, 'value="foo"')
+
+    def test_library_submission_and_display(self):
+        """Confirm that we can submit and then immediately see a library."""
+        post_response = self.client.post(
+            reverse("tv:add_library"),
+            {"path": "/mnt/video/Series", "prefix": "/mnt", "servername": "samba.local", "shortname": "video"},
+        )
+        self.assertIn(post_response.status_code, [200, 302])
+        get_response = self.client.get(reverse("tv:index"))
+        self.assertIn(get_response.status_code, [200, 302])
+        self.assertContains(get_response, "/mnt/video/Series")
+
+
+class TvSeriesViewTests(TestCase):
+    """Tests for the Series view of a particular library."""
 
     @classmethod
-    def tearDownClass(cls):
-        """Clean up the temporary directory structure."""
-        super(EpisodeModelTests, cls).tearDownClass()
-        cls.seriesdir.cleanup()
-        cls.libdir.cleanup()
+    def setUpClass(cls):
+        """Create a temporary directory structure with known contents for testing."""
+        super(TvSeriesViewTests, cls).setUpClass()
+        cls.dfac = DirectoryFactory()
+        cls.dfac.create_library()
+        cls.dfac.create_series(3)
+        cls.testlib = Library(
+            path=cls.dfac.libdir.name, prefix=tempfile.gettempdir(), servername="localhost", shortname="testlib4"
+        )
+        cls.testlib.save()
+
+    def test_section_presence_and_form_functions(self):
+        """Confirm the presence of the four main sections of the series page, and confirm form outputs."""
+        # This has to be one test because things MUST run in order.
+        # First, check the page structure.
+        response = self.client.get(reverse("tv:library", args=("testlib4",)))
+        self.assertIn(response.status_code, [200, 302])
+        self.assertContains(response, "Active Series List")
+        self.assertContains(response, "Available Series List")
+        self.assertContains(response, "Add Series")
+        self.assertContains(response, "Delete Library")
+        # Now test that you can add a series.
+        test_series_name = os.path.basename(self.dfac.series[0].name)
+        response = self.client.post(
+            reverse("tv:add_series", args=("testlib4",)), {"series_name": test_series_name, "library": "testlib4"}
+        )
+        self.assertIn(response.status_code, [200, 302])
+        response = self.client.get(reverse("tv:library", args=("testlib4",)))
+        self.assertContains(response, test_series_name)
+        # Now test the add all feature.
+        response = self.client.post(
+            reverse("tv:add_series", args=("testlib4",)), {"series_name": "all", "library": "testlib4"}
+        )
+        self.assertIn(response.status_code, [200, 302])
+        self.assertEqual(Series.objects.filter(library=self.testlib).count(), 3)
+        # Now test that you can delete a library.
+        response = self.client.post(reverse("tv:delete_library"), {"library": "testlib4"})
+        self.assertIn(response.status_code, [200, 302])
+        response = self.client.get(reverse("tv:index"))
+        self.assertIn(response.status_code, [200, 302])
+        self.assertContains(response, "No libraries are available.")
+        response = self.client.get(reverse("tv:library", args=("testlib4",)))
+        self.assertEquals(response.status_code, 404)
+
+
+class TvSeriesDetailViewTests(TestCase):
+    """Tests for the Series detail view that allows playing episodes."""
+
+    @classmethod
+    def setUpClass(cls):
+        """Create a temporary directory structure with known contents for testing."""
+        super(TvSeriesDetailViewTests, cls).setUpClass()
+        cls.dfac = DirectoryFactory()
+        cls.dfac.create_library()
+        cls.dfac.create_series(1)
+        cls.dfac.create_episodes(3, False)
+        cls.testlib = Library(
+            path=cls.dfac.libdir.name, prefix=tempfile.gettempdir(), servername="localhost", shortname="testlib5"
+        )
+        cls.testlib.save()
+        cls.testser = Series(series_name=os.path.basename(cls.dfac.series[0].name), library=cls.testlib)
+        cls.testser.save()
+
+    @patch("tv.views.Kodi")
+    def test_full_page_behavior(self, mock_kodi):
+        """Exercise all parts of the series detail page."""
+        # Must be a single test to avoid race conditions with data.
+        # Step 1: Test the presence of various elements.
+        response = self.client.get(reverse("tv:episodes", args=("testlib5", self.testser.series_name)))
+        self.assertIn(response.status_code, [200, 302])
+        self.assertContains(response, "Next Episode")
+        self.assertContains(response, "Random Episode")
+        self.assertContains(response, "Selected Episode")
+        self.assertContains(response, "All Episodes")
+        self.assertContains(response, "Kodi Control")
+        # Step 2: Confirm that an empty set of episodes results in expected messaging.
+        self.assertContains(response, "No episodes loaded")
+        # Step 3a: Submit the form action to load the episodes.
+        response = self.client.post(
+            reverse("tv:manage_all_episodes", args=("testlib5", self.testser.series_name)), {"action": "load_all"}
+        )
+        self.assertIn(response.status_code, [200, 302])
+        # Step 3b: Refetch the detail page and check for episode names.
+        response = self.client.get(reverse("tv:episodes", args=("testlib5", self.testser.series_name)))
+        self.assertIn(response.status_code, [200, 302])
+        self.assertContains(response, self.dfac.episodes[0].name)
+        # Set up some important variables for later.
+        ep_smb_paths = list(
+            Episode.objects.filter(series=self.testser.series_name)
+            .order_by("smb_path")
+            .values_list("smb_path", flat=True)
+        )
+        first_ep_smb_path = ep_smb_paths[0]
+        second_ep_smb_path = ep_smb_paths[1]
+        last_ep_smb_path = ep_smb_paths[-1]
+        # Step 4a: Mark up to the very last episode as watched.
+        response = self.client.post(
+            reverse("tv:mark_watched_up_to", args=("testlib5", self.testser.series_name)),
+            {"smb_path": last_ep_smb_path},
+        )
+        self.assertIn(response.status_code, [200, 302])
+        # Step 4b: Refetch the detail page and check that the next episode is the last one.
+        expected = 'name="smb_path" id="next" value="{0}"'.format(last_ep_smb_path)
+        response = self.client.get(reverse("tv:episodes", args=("testlib5", self.testser.series_name)))
+        self.assertIn(response.status_code, [200, 302])
+        self.assertContains(response, expected)
+        # Step 5a: Mark all episodes as unwatched.
+        response = self.client.post(
+            reverse("tv:manage_all_episodes", args=("testlib5", self.testser.series_name)), {"action": "mark_unwatched"}
+        )
+        self.assertIn(response.status_code, [200, 302])
+        # Step 5b: Refetch the detail page and check that the next episode is the first one.
+        expected = 'name="smb_path" id="next" value="{0}"'.format(first_ep_smb_path)
+        response = self.client.get(reverse("tv:episodes", args=("testlib5", self.testser.series_name)))
+        self.assertIn(response.status_code, [200, 302])
+        self.assertContains(response, expected)
+        # Step 6a: Mark the first episode as watched.
+        response = self.client.post(
+            reverse("tv:watched", args=("testlib5", self.testser.series_name)),
+            {"smb_path": first_ep_smb_path},
+        )
+        self.assertIn(response.status_code, [200, 302])
+        # Step 6b: Refetch the detail page and check that the next episode is the second one.
+        expected = 'name="smb_path" id="next" value="{0}"'.format(second_ep_smb_path)
+        response = self.client.get(reverse("tv:episodes", args=("testlib5", self.testser.series_name)))
+        self.assertIn(response.status_code, [200, 302])
+        self.assertContains(response, expected)
+        # Step 7a: Test the play button and advancing episodes.
+        mock_kodi.confirmSuccessfulPlay.return_value = True
+        response = self.client.post(
+            reverse("tv:play", args=("testlib5", self.testser.series_name)),
+            {"smb_path": second_ep_smb_path},
+        )
+        # Confirm that Kodi is being called.
+        expected_call_list = [call().addAndPlay(second_ep_smb_path), call().confirmSuccessfulPlay(second_ep_smb_path)]
+        for ec in expected_call_list:
+            self.assertIn(ec, mock_kodi.mock_calls)
+        self.assertIn(response.status_code, [200, 302])
+        # Step 7b: Refetch the detail page and check that the next episode is the last one.
+        expected = 'name="smb_path" id="next" value="{0}"'.format(last_ep_smb_path)
+        response = self.client.get(reverse("tv:episodes", args=("testlib5", self.testser.series_name)))
+        self.assertIn(response.status_code, [200, 302])
+        self.assertContains(response, expected)
+        # Step 8a: Exercise the available Kodi controls.
+        action_list = [
+            ("subsOff", call().subsOff()),
+            ("subsOn", call().subsOn()),
+            ("nextItem", call().nextItem()),
+            ("nextStream", call().nextStream()),
+        ]
+        for action in action_list:
+            expected_call = action[1]
+            response = self.client.post(
+                reverse("tv:kodi_control", args=("testlib5", self.testser.series_name)), {"action": action[0]}
+            )
+            self.assertIn(response.status_code, [200, 302])
+            self.assertIn(expected_call, mock_kodi.mock_calls)
+        # Step 8b: Refetch the detail page and confirm that nothing has advanced (same as 7b).
+        expected = 'name="smb_path" id="next" value="{0}"'.format(last_ep_smb_path)
+        response = self.client.get(reverse("tv:episodes", args=("testlib5", self.testser.series_name)))
+        self.assertIn(response.status_code, [200, 302])
+        self.assertContains(response, expected)
+        # Step 9: Test series deletion.
+        response = self.client.post(
+            reverse("tv:manage_all_episodes", args=("testlib5", self.testser.series_name)), {"action": "delete_series"}
+        )
+        self.assertIn(response.status_code, [200, 302])
+        self.assertEqual(Series.objects.filter(series_name=self.testser.series_name).count(), 0)
