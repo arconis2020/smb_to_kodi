@@ -32,7 +32,7 @@ class Kodi:
             playing_file = r["result"]["item"]["file"]
             assert bool(playing_file)
             return (True, playing_file)
-        except (TypeError, AssertionError):
+        except (KeyError, AssertionError):
             return (False, "None")
 
     def confirmSuccessfulPlay(self, filename):
@@ -42,7 +42,7 @@ class Kodi:
         try:
             files = [x["file"] for x in r["result"]["items"]]
             assert filename in files
-        except (TypeError, AssertionError):
+        except (KeyError, AssertionError):
             return False
         return self.nowPlaying()[0]
 
@@ -55,11 +55,6 @@ class Kodi:
             self.logger.info("Added {a} to playlist successfully!".format(a=filename))
         else:
             self.logger.error("PROBLEM: {a} not added to playlist. Try a different way.".format(a=filename))
-
-    def listPlaylistItems(self):
-        """List all current playlist items."""
-        specific_params = {"method": "Playlist.GetItems", "params": {"playlistid": 1, "properties": ["file"]}}
-        r = self._runit(specific_params)
 
     def clearPlaylist(self):
         """Clear the current playlist."""
@@ -77,7 +72,7 @@ class Kodi:
         """Advance to the next item in the current playlist."""
         specific_params = {"method": "Player.GoTo", "params": {"playerid": 1, "to": "next"}}
         r = self._runit(specific_params)
-        self.logger.info("Skipping to next stream: %s" % r.get("result"))
+        self.logger.info("Skipping to next item: %s" % r.get("result"))
 
     def nextStream(self):
         """Cycle to the next audio stream in the currently playing file."""
@@ -98,9 +93,9 @@ class Kodi:
         """Turn subtitles on, using the first availble subtitle."""
         specific_params = {"method": "Player.SetSubtitle", "params": {"playerid": 1, "subtitle": "on", "enable": True}}
         r = self._runit(specific_params)
-        self.logger.info("Dropping subtitles: %s" % r.get("result"))
+        self.logger.info("Enabling subtitles: %s" % r.get("result"))
 
-    def addAndPlay(self, filename):
+    def addAndPlay(self, filename):  # pragma: no cover
         """Add a file to the current playlist and hit play (convenience function)."""
         if self.nowPlaying()[0]:
             self.addToPlaylist(filename)

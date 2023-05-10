@@ -2,6 +2,7 @@
 from django.test import TestCase
 from django.urls import reverse
 from unittest.mock import call, patch
+from requests.exceptions import ConnectionError
 import black
 import os
 import pycodestyle
@@ -10,6 +11,7 @@ import tempfile
 
 
 from .models import Player, Library, Series, Episode
+from .kodi import Kodi
 
 
 class DirectoryFactory:
@@ -240,14 +242,14 @@ class TvSeriesViewTests(TestCase):
     def test_section_presence_and_form_functions(self):
         """Confirm the presence of the four main sections of the series page, and confirm form outputs."""
         # This has to be one test because things MUST run in order.
-        # First, check the page structure.
+        # Step 1: Check the page structure.
         response = self.client.get(reverse("tv:library", args=("testlib4",)))
         self.assertIn(response.status_code, [200, 302])
         self.assertContains(response, "Active Series List")
         self.assertContains(response, "Available Series List")
         self.assertContains(response, "Add Series")
         self.assertContains(response, "Delete Library")
-        # Now test that you can add a series.
+        # Step 2: Test that you can add a series.
         test_series_name = os.path.basename(self.dfac.series[0].name)
         response = self.client.post(
             reverse("tv:add_series", args=("testlib4",)), {"series_name": test_series_name, "library": "testlib4"}
@@ -255,13 +257,13 @@ class TvSeriesViewTests(TestCase):
         self.assertIn(response.status_code, [200, 302])
         response = self.client.get(reverse("tv:library", args=("testlib4",)))
         self.assertContains(response, test_series_name)
-        # Now test the add all feature.
+        # Step 3: Test the add all feature.
         response = self.client.post(
             reverse("tv:add_series", args=("testlib4",)), {"series_name": "all", "library": "testlib4"}
         )
         self.assertIn(response.status_code, [200, 302])
         self.assertEqual(Series.objects.filter(library=self.testlib).count(), 3)
-        # Now test that you can delete a library.
+        # Step 4: Test that you can delete a library.
         response = self.client.post(reverse("tv:delete_library"), {"library": "testlib4"})
         self.assertIn(response.status_code, [200, 302])
         response = self.client.get(reverse("tv:index"))
@@ -394,3 +396,168 @@ class TvSeriesDetailViewTests(TestCase):
         )
         self.assertIn(response.status_code, [200, 302])
         self.assertEqual(Series.objects.filter(series_name=self.testser.series_name).count(), 0)
+
+
+@patch("tv.kodi.requests.post")
+class KodiTests(TestCase):
+    """Test that the Kodi library works as intended."""
+
+    @classmethod
+    def setUpClass(cls):
+        """Create a single Kodi instance for testing."""
+        super(KodiTests, cls).setUpClass()
+        cls.player = Player(pid=1, address="foo")
+        cls.player.save()
+        cls.kodi = Kodi()
+        cls.nothing_playing = {
+            "id": "1",
+            "jsonrpc": "2.0",
+            "result": {"item": {"file": "", "label": "", "type": "unknown"}},
+        }
+        cls.foo_playing = {
+            "id": "1",
+            "jsonrpc": "2.0",
+            "result": {"item": {"file": "foo", "label": "foo", "type": "unknown"}},
+        }
+        cls.foo_in_playlist = {
+            "id": "1",
+            "jsonrpc": "2.0",
+            "result": {
+                "items": [{"file": "foo", "label": "foo", "type": "unknown"}],
+                "limits": {"end": 1, "start": 0, "total": 1},
+            },
+        }
+        cls.generic_ok = {"id": "1", "jsonrpc": "2.0", "result": "OK"}
+
+    def test_now_playing(self, mock_post):
+        """Test that the nowPlaying function returns our expected True/False tuples."""
+        # Step 1: Test that nothing playing returns the False tuple.
+        mock_post.return_value.status_code = 200
+        mock_post.return_value.json.return_value = self.nothing_playing
+        result = self.kodi.nowPlaying()
+        self.assertEqual(result, (False, "None"))
+        # Step 2: Test that a bad connection returns the False tuple.
+        mock_post.reset_mock(return_value=True, side_effect=True)
+        mock_post.side_effect = ConnectionError("Not Connected.")
+        result = self.kodi.nowPlaying()
+        self.assertEqual(result, (False, "None"))
+        # Step 3: Test that something playing returns the True tuple.
+        mock_post.reset_mock(return_value=True, side_effect=True)
+        mock_post.return_value.status_code = 200
+        mock_post.return_value.json.return_value = self.foo_playing
+        result = self.kodi.nowPlaying()
+        self.assertEqual(result, (True, "foo"))
+
+    @patch("tv.kodi.Kodi.nowPlaying", return_value=(True, "foo"))
+    def test_confirm_successful_play(self, mock_play, mock_post):
+        """Test that the confirmSuccessfulPlay function returns True/False based on playlist and connection."""
+        # Step 1: Test that we get True when the file is in the playlist.
+        mock_post.return_value.status_code = 200
+        mock_post.return_value.json.return_value = self.foo_in_playlist
+        self.assertTrue(self.kodi.confirmSuccessfulPlay("foo"))
+        # Step 2: Test that we get False when the file is NOT in the playlist.
+        self.assertFalse(self.kodi.confirmSuccessfulPlay("bar"))
+        # Step 3: Test that we get False when there is no connection to Kodi.
+        mock_post.reset_mock(return_value=True, side_effect=True)
+        mock_post.side_effect = ConnectionError("Not Connected.")
+        self.assertFalse(self.kodi.confirmSuccessfulPlay("foo"))
+
+    def log_with_connection(self, mock_post, kodi_function, kodi_function_args, exp_log_output):
+        """Run a Kodi function and confirm the log output, following DRY."""
+        mock_post.return_value.status_code = 200
+        mock_post.return_value.json.return_value = self.generic_ok
+        with self.assertLogs("django", level="INFO") as lm1:
+            kodi_function(*kodi_function_args)
+        self.assertEqual(lm1.output, exp_log_output)
+
+    def log_without_connection(self, mock_post, kodi_function, kodi_function_args, exp_log_output):
+        """Run a Kodi function and confirm the log output, following DRY."""
+        mock_post.reset_mock(return_value=True, side_effect=True)
+        mock_post.side_effect = ConnectionError("Not Connected.")
+        with self.assertLogs("django", level="INFO") as lm1:
+            kodi_function(*kodi_function_args)
+        self.assertEqual(lm1.output, exp_log_output)
+
+    def test_add_to_playlist(self, mock_post):
+        """Test that the addToPlaylist function logs as expected."""
+        # Step 1: Test that we get the good log entry when connected.
+        self.log_with_connection(
+            mock_post, self.kodi.addToPlaylist, ("foo",), ["INFO:django:Added foo to playlist successfully!"]
+        )
+        # Step 2: Test that we get the bad log entry when not connected.
+        self.log_without_connection(
+            mock_post,
+            self.kodi.addToPlaylist,
+            ("foo",),
+            ["ERROR:django:PROBLEM: foo not added to playlist. Try a different way."],
+        )
+
+    def test_clear_playlist(self, mock_post):
+        """Test that the clearPlaylist function logs as expected."""
+        # Step 1: Test that we get the good log entry when connected.
+        self.log_with_connection(mock_post, self.kodi.clearPlaylist, (), ["INFO:django:Clearing playlist: OK"])
+        # Step 2: Test that we get the bad log entry when not connected.
+        self.log_without_connection(
+            mock_post, self.kodi.clearPlaylist, (), ["INFO:django:Clearing playlist: {'connection': False}"]
+        )
+
+    def test_play_it(self, mock_post):
+        """Test that the playIt function logs as expected."""
+        # Step 1: Test that we get the good log entry when connected.
+        self.log_with_connection(mock_post, self.kodi.playIt, (), ["INFO:django:Playing: OK"])
+        # Step 2: Test that we get the bad log entry when not connected.
+        self.log_without_connection(mock_post, self.kodi.playIt, (), ["INFO:django:Playing: {'connection': False}"])
+
+    def test_next_item(self, mock_post):
+        """Test that the nextItem function logs as expected."""
+        # Step 1: Test that we get the good log entry when connected.
+        self.log_with_connection(mock_post, self.kodi.nextItem, (), ["INFO:django:Skipping to next item: OK"])
+        # Step 2: Test that we get the bad log entry when not connected.
+        self.log_without_connection(
+            mock_post, self.kodi.nextItem, (), ["INFO:django:Skipping to next item: {'connection': False}"]
+        )
+
+    def test_next_stream(self, mock_post):
+        """Test that the nextStream function logs as expected."""
+        # Step 1: Test that we get the good log entry when connected.
+        self.log_with_connection(mock_post, self.kodi.nextStream, (), ["INFO:django:Skipping to next stream: OK"])
+        # Step 2: Test that we get the bad log entry when not connected.
+        self.log_without_connection(
+            mock_post, self.kodi.nextStream, (), ["INFO:django:Skipping to next stream: {'connection': False}"]
+        )
+
+    def test_subs_off(self, mock_post):
+        """Test that the subsOff function logs as expected."""
+        # Step 1: Test that we get the good log entry when connected.
+        self.log_with_connection(mock_post, self.kodi.subsOff, (), ["INFO:django:Dropping subtitles: OK"])
+        # Step 2: Test that we get the bad log entry when not connected.
+        self.log_without_connection(
+            mock_post, self.kodi.subsOff, (), ["INFO:django:Dropping subtitles: {'connection': False}"]
+        )
+
+    def test_subs_on(self, mock_post):
+        """Test that the subsOn function logs as expected."""
+        # Step 1: Test that we get the good log entry when connected.
+        self.log_with_connection(mock_post, self.kodi.subsOn, (), ["INFO:django:Enabling subtitles: OK"])
+        # Step 2: Test that we get the bad log entry when not connected.
+        self.log_without_connection(
+            mock_post, self.kodi.subsOn, (), ["INFO:django:Enabling subtitles: {'connection': False}"]
+        )
+
+    def test_set_audio_passthrough(self, mock_post):
+        """Test that the setAudioPassthrough function logs as expected."""
+        # Step 1: Test that we get the good log entry when connected.
+        self.log_with_connection(
+            mock_post, self.kodi.setAudioPassthrough, (True,), ["INFO:django:Enabling passthrough: OK"]
+        )
+        # Step 2: Test that we get the good log entry when connected and trying to disable passthrough
+        self.log_with_connection(
+            mock_post, self.kodi.setAudioPassthrough, (False,), ["INFO:django:Disabling passthrough: OK"]
+        )
+        # Step 3: Test that we get the bad log entry when not connected.
+        self.log_without_connection(
+            mock_post,
+            self.kodi.setAudioPassthrough,
+            (True,),
+            ["INFO:django:Enabling passthrough: {'connection': False}"],
+        )
