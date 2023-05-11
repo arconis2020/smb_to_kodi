@@ -1,0 +1,7 @@
+[MASTER]
+max-line-length=120
+django-settings-module=smb_to_kodi.settings
+load-plugins=pylint_django
+ignore-paths=tv/migrations
+disable=E1120,W0622,logging-fstring-interpolation
+enable=logging-format-interpolation

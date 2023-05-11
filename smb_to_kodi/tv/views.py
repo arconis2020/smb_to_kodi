@@ -1,10 +1,10 @@
 """Class-based and function-based view backings for the URLs in the tv app."""
+from random import choice
 from django.db.models import Count
 from django.http import HttpResponseRedirect, Http404
-from django.shortcuts import get_list_or_404, get_object_or_404, render
+from django.shortcuts import render
 from django.urls import reverse
 from django.views import generic
-from random import choice
 
 from .models import Player, Library, Series, Episode
 from .kodi import Kodi
@@ -52,8 +52,7 @@ class SeriesView(generic.ListView):
         libcheck = Library.objects.filter(shortname=this_sn).count()
         if libcheck > 0:
             return Series.objects.filter(library__shortname=this_sn).order_by("series_name")
-        else:
-            raise Http404("No library of that name is loaded in the DB.")
+        raise Http404("No library of that name is loaded in the DB.")
 
 
 def series_detail(request, shortname, series):
@@ -79,8 +78,8 @@ def play(request, shortname, series):
     """Play the given file in Kodi (POST target)."""
     mypath = request.POST["smb_path"]
     k = Kodi()
-    k.addAndPlay(mypath)
-    if k.confirmSuccessfulPlay(mypath):
+    k.add_and_play(mypath)
+    if k.confirm_successful_play(mypath):
         this_episode = Episode.objects.get(pk=mypath)
         this_episode.watched = True
         this_episode.save()
@@ -116,8 +115,8 @@ def manage_all_episodes(request, shortname, series):
 def mark_watched_up_to(request, shortname, series):
     """Mark all episodes prior to the selected one as watched in the DB (POST target)."""
     mypath = request.POST["smb_path"]
-    try:
-        this_episode = Episode.objects.get(pk=mypath)
+    try:  # Confirm the episode exists
+        _ = Episode.objects.get(pk=mypath)
     except Episode.DoesNotExist:  # pragma: no cover
         return HttpResponseRedirect(reverse("tv:episodes", args=(shortname, series)))
     Episode.objects.filter(series=series, smb_path__lt=mypath).update(watched=True)
@@ -128,14 +127,14 @@ def kodi_control(request, shortname, series):
     """Issue commands to Kodi based on the form selection (POST target)."""
     this_action = request.POST["action"]
     k = Kodi()
-    if this_action == "subsOff":
-        k.subsOff()
-    elif this_action == "subsOn":
-        k.subsOn()
-    elif this_action == "nextItem":
-        k.nextItem()
-    elif this_action == "nextStream":
-        k.nextStream()
+    if this_action == "subs_off":
+        k.subs_off()
+    elif this_action == "subs_on":
+        k.subs_on()
+    elif this_action == "next_item":
+        k.next_item()
+    elif this_action == "next_stream":
+        k.next_stream()
     return HttpResponseRedirect(reverse("tv:episodes", args=(shortname, series)))
 
 
@@ -179,6 +178,6 @@ def delete_library(request):
 def add_player(request):
     """Configure the address of the Kodi player's JSON RPC endpoint (POST target)."""
     this_player_address = request.POST["player_address"]
-    p = Player(pid=1, address=this_player_address)
-    p.save()
+    this_player = Player(pid=1, address=this_player_address)
+    this_player.save()
     return HttpResponseRedirect(reverse("tv:index"))

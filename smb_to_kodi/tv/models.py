@@ -1,10 +1,10 @@
 """All data model objects for the tv application."""
-from django.db import models
 from os import walk
 from os.path import basename, join, relpath, realpath
 from pathlib import Path
 import mimetypes
 import unicodedata
+from django.db import models
 
 
 class Player(models.Model):
@@ -42,8 +42,10 @@ class Library(models.Model):
         """Find all subdirectories in this library, and treat them as Series objects, loading them in."""
         listing = Path(self.path)
         result = [x.name for x in listing.iterdir() if x.is_dir()]
-        for r in result:
-            self.series_set.update_or_create(series_name=r)
+        # Add the new series, don't touch anything that exists.
+        to_add = set(result) - set(self.series_set.values_list("series_name", flat=True))
+        to_add = [Series(library=self, series_name=x) for x in to_add]
+        self.series_set.bulk_create(to_add)
 
 
 class Series(models.Model):
@@ -65,20 +67,20 @@ class Series(models.Model):
         """Find all video files in this folder, and add them as episodes for this series."""
         # First, find all of the episodes.
         found = []
-        for root, dirs, files in walk(join(self.library.path, self.series_name)):
-            for f in files:
-                filetype = mimetypes.guess_type(f)[0]
+        for root, _, files in walk(join(self.library.path, self.series_name)):
+            for this_file in files:
+                filetype = mimetypes.guess_type(this_file)[0]
                 if filetype is None:
                     continue
                 if filetype.startswith("video/"):
-                    this_smb_path = self.library.get_smb_path(realpath(join(root, f)))
+                    this_smb_path = self.library.get_smb_path(realpath(join(root, this_file)))
                     found.append(this_smb_path)
         # Now remove anything that wasn't found on disk.
         self.episode_set.exclude(smb_path__in=found).delete()
         # Now add anything that is new on disk.
         to_add = set(found) - set(self.episode_set.values_list("smb_path", flat=True))
-        for ta in to_add:
-            self.episode_set.create(smb_path=ta)
+        to_add = [Episode(series=self, smb_path=x) for x in to_add]
+        self.episode_set.bulk_create(to_add)
 
 
 class Episode(models.Model):
@@ -98,4 +100,5 @@ class Episode(models.Model):
 
     def basename(self):
         """Return a shortname for the episode for easy display purposes."""
-        return "{0}".format(basename(self.smb_path))
+        my_basename = basename(self.smb_path)
+        return f"{my_basename}"

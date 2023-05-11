@@ -1,7 +1,7 @@
 """A module to control a Kodi/XMBC media player over the network using JSONRPC."""
-from .models import Player
-import requests
 import logging
+import requests
+from .models import Player
 
 
 class Kodi:
@@ -19,96 +19,97 @@ class Kodi:
         paramdict = self.struct.copy()
         paramdict.update(specific_params)
         try:
-            r = requests.post(url=self.url, json=paramdict, headers=self.headers)
-            return r.json()
+            res = requests.post(url=self.url, json=paramdict, headers=self.headers, timeout=30)
+            return res.json()
         except requests.exceptions.ConnectionError:
             return {"result": {"connection": False}}
 
-    def nowPlaying(self):
+    def now_playing(self):
         """Obtain the name of the currently playing item, if any, and confirm the player is playing."""
         specific_params = {"method": "Player.GetItem", "params": {"playerid": 1, "properties": ["file"]}}
-        r = self._runit(specific_params)
+        res = self._runit(specific_params)
         try:
-            playing_file = r["result"]["item"]["file"]
+            playing_file = res["result"]["item"]["file"]
             assert bool(playing_file)
             return (True, playing_file)
         except (KeyError, AssertionError):
             return (False, "None")
 
-    def confirmSuccessfulPlay(self, filename):
+    def confirm_successful_play(self, filename):
         """Confirm that the filename is in the current playlist, and that the player is playing."""
         specific_params = {"method": "Playlist.GetItems", "params": {"playlistid": 1, "properties": ["file"]}}
-        r = self._runit(specific_params)
+        res = self._runit(specific_params)
         try:
-            files = [x["file"] for x in r["result"]["items"]]
+            files = [x["file"] for x in res["result"]["items"]]
             assert filename in files
         except (KeyError, AssertionError):
             return False
-        return self.nowPlaying()[0]
+        return self.now_playing()[0]
 
-    def addToPlaylist(self, filename):
+    def add_to_playlist(self, filename):
         """Add the filename (str) to the current playlist."""
         specific_params = {"method": "Playlist.Add", "params": {"playlistid": 1, "item": {"file": filename}}}
-        r = self._runit(specific_params)
-        o = r.get("result")
-        if o and o == "OK":
-            self.logger.info("Added {a} to playlist successfully!".format(a=filename))
+        res = self._runit(specific_params)
+        out = res.get("result")
+        if out and out == "OK":
+            self.logger.info(f"Added {filename} to playlist successfully!")
         else:
-            self.logger.error("PROBLEM: {a} not added to playlist. Try a different way.".format(a=filename))
+            self.logger.error(f"PROBLEM: {filename} not added to playlist. Try a different way.")
 
-    def clearPlaylist(self):
+    def clear_playlist(self):
         """Clear the current playlist."""
         specific_params = {"method": "Playlist.Clear", "params": {"playlistid": 1}}
-        r = self._runit(specific_params)
-        self.logger.info("Clearing playlist: %s" % r.get("result"))
+        res = self._runit(specific_params)
+        self.logger.info(f"Clearing playlist: {res.get('result')}")
 
-    def playIt(self):
+    def play_it(self):
         """Press the play button, likely playing the first item in the current playlist."""
         specific_params = {"method": "Player.Open", "params": {"item": {"playlistid": 1}}}
-        r = self._runit(specific_params)
-        self.logger.info("Playing: %s" % r.get("result"))
+        res = self._runit(specific_params)
+        self.logger.info(f"Playing: {res.get('result')}")
 
-    def nextItem(self):
+    def next_item(self):
         """Advance to the next item in the current playlist."""
         specific_params = {"method": "Player.GoTo", "params": {"playerid": 1, "to": "next"}}
-        r = self._runit(specific_params)
-        self.logger.info("Skipping to next item: %s" % r.get("result"))
+        res = self._runit(specific_params)
+        self.logger.info(f"Skipping to next item: {res.get('result')}")
 
-    def nextStream(self):
+    def next_stream(self):
         """Cycle to the next audio stream in the currently playing file."""
         specific_params = {"method": "Player.SetAudioStream", "params": {"playerid": 1, "stream": "next"}}
-        r = self._runit(specific_params)
-        self.logger.info("Skipping to next stream: %s" % r.get("result"))
+        res = self._runit(specific_params)
+        self.logger.info(f"Skipping to next stream: {res.get('result')}")
 
-    def subsOff(self):
+    def subs_off(self):
         """Turn subtitles off."""
         specific_params = {
             "method": "Player.SetSubtitle",
             "params": {"playerid": 1, "subtitle": "off", "enable": False},
         }
-        r = self._runit(specific_params)
-        self.logger.info("Dropping subtitles: %s" % r.get("result"))
+        res = self._runit(specific_params)
+        self.logger.info(f"Dropping subtitles: {res.get('result')}")
 
-    def subsOn(self):
+    def subs_on(self):
         """Turn subtitles on, using the first availble subtitle."""
         specific_params = {"method": "Player.SetSubtitle", "params": {"playerid": 1, "subtitle": "on", "enable": True}}
-        r = self._runit(specific_params)
-        self.logger.info("Enabling subtitles: %s" % r.get("result"))
+        res = self._runit(specific_params)
+        self.logger.info(f"Enabling subtitles: {res.get('result')}")
 
-    def addAndPlay(self, filename):  # pragma: no cover
+    def add_and_play(self, filename):  # pragma: no cover
         """Add a file to the current playlist and hit play (convenience function)."""
-        if self.nowPlaying()[0]:
-            self.addToPlaylist(filename)
+        if self.now_playing()[0]:
+            self.add_to_playlist(filename)
         else:
-            self.clearPlaylist()
-            self.addToPlaylist(filename)
-            self.playIt()
+            self.clear_playlist()
+            self.add_to_playlist(filename)
+            self.play_it()
 
-    def setAudioPassthrough(self, passtf):
+    def set_audio_passthrough(self, passtf):
         """Enable or disable audio passthrough based on the True/False of the passtf argument."""
         specific_params = {
             "method": "Settings.SetSettingValue",
             "params": {"setting": "audiooutput.passthrough", "value": bool(passtf)},
         }
-        r = self._runit(specific_params)
-        self.logger.info("{0} passthrough: {1}".format("Enabling" if bool(passtf) else "Disabling", r.get("result")))
+        res = self._runit(specific_params)
+        action = "Enabling" if bool(passtf) else "Disabling"
+        self.logger.info(f"{action} passthrough: {res.get('result')}")

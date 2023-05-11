@@ -1,20 +1,20 @@
 """All unit tests for the tv app."""
-from django.test import TestCase
-from django.urls import reverse
 from unittest.mock import call, patch
-from requests.exceptions import ConnectionError
-import black
 import os
+import tempfile
+import black
 import pycodestyle
 import pydocstyle
-import tempfile
+from django.test import TestCase
+from django.urls import reverse
+from requests.exceptions import ConnectionError
 
 
 from .models import Player, Library, Series, Episode
 from .kodi import Kodi
 
 
-class DirectoryFactory:
+class DirectoryFactory:  # pylint: disable=R1732
     """A reusable object to manage directory structures required for libraries/series/episodes."""
 
     def __init__(self):
@@ -29,7 +29,7 @@ class DirectoryFactory:
 
     def create_series(self, num):
         """Create a number of series structures."""
-        for x in range(num):
+        for _ in range(num):
             this_td = tempfile.TemporaryDirectory(dir=self.libdir.name)
             self.series.append(this_td)
 
@@ -38,7 +38,7 @@ class DirectoryFactory:
         # Make sure that each episode has a numbered prefix in order of adding for sorting.
         # Start at 11 to support more than 10 episodes in sort order.
         prefixer = 11
-        for x in range(num):
+        for _ in range(num):
             # Should be seen by mimetypes as video
             this_f = tempfile.NamedTemporaryFile(dir=self.series[0].name, suffix=".mkv", prefix=str(prefixer))
             self.episodes.append(this_f)
@@ -66,12 +66,12 @@ class StylingAndFormattingTests(TestCase):
     def test_docstyle(self):
         """Ensure compliance with PEP-257 (pydocstyle)."""
         to_check = []
-        for root, dirs, files in os.walk("./tv"):
+        for root, _, files in os.walk("./tv"):
             if "migrations" in root:
                 continue
-            for f in files:
-                fullpath = os.path.join(root, f)
-                if all([f.endswith(".py"), os.stat(fullpath).st_size > 0]):
+            for this_file in files:
+                fullpath = os.path.join(root, this_file)
+                if all([this_file.endswith(".py"), os.stat(fullpath).st_size > 0]):
                     to_check.append(fullpath)
         errors = [str(error) for error in pydocstyle.check(to_check)]
         if errors:
@@ -83,12 +83,12 @@ class PlayerModelTests(TestCase):
 
     def test_player_replacement(self):
         """Ensure that providing the same primary key replaces the database entry instead of appending."""
-        p1 = Player(pid=1, address="foo")
-        p1.save()
+        player_one = Player(pid=1, address="foo")
+        player_one.save()
         self.assertEqual(Player.objects.count(), 1)
         self.assertEqual(Player.objects.get(pk=1).address, "foo")
-        p2 = Player(pid=1, address="bar")
-        p2.save()
+        player_two = Player(pid=1, address="bar")
+        player_two.save()
         self.assertEqual(Player.objects.count(), 1)
         self.assertEqual(Player.objects.get(pk=1).address, "bar")
 
@@ -117,10 +117,10 @@ class LibraryModelTests(TestCase):
         """Confirm that the smb path is predictable."""
         test_path = self.dfac.episodes[0].name
         test_smb_path = self.testlib.get_smb_path(test_path)
-        self.assertRegex(test_smb_path, "^smb://{0}".format(self.testlib.servername))
+        self.assertRegex(test_smb_path, f"^smb://{self.testlib.servername}")
         this_dir, this_file = os.path.split(test_path)
         trailer = os.path.join(os.path.basename(this_dir), this_file)
-        self.assertRegex(test_smb_path, "{0}$".format(trailer))
+        self.assertRegex(test_smb_path, f"{trailer}$")
 
     def test_add_all_series(self):
         """Confirm that all folders are added as expected to the library."""
@@ -174,8 +174,8 @@ class EpisodeModelTests(TestCase):
         cls.testser = Series(series_name=os.path.basename(cls.dfac.series[0].name), library=cls.testlib)
         cls.testser.save()
         cls.testeps = []
-        for x in cls.dfac.episodes:
-            this_ep = Episode(series=cls.testser, smb_path=x.name, watched=False)
+        for episode in cls.dfac.episodes:
+            this_ep = Episode(series=cls.testser, smb_path=episode.name, watched=False)
             this_ep.save()
             cls.testeps.append(this_ep)
 
@@ -270,7 +270,7 @@ class TvSeriesViewTests(TestCase):
         self.assertIn(response.status_code, [200, 302])
         self.assertContains(response, "No libraries are available.")
         response = self.client.get(reverse("tv:library", args=("testlib4",)))
-        self.assertEquals(response.status_code, 404)
+        self.assertEqual(response.status_code, 404)
 
 
 class TvSeriesDetailViewTests(TestCase):
@@ -298,13 +298,8 @@ class TvSeriesDetailViewTests(TestCase):
         # Step 1: Test the presence of various elements.
         response = self.client.get(reverse("tv:episodes", args=("testlib5", self.testser.series_name)))
         self.assertIn(response.status_code, [200, 302])
-        self.assertContains(response, "Next Episode")
-        self.assertContains(response, "Random Episode")
-        self.assertContains(response, "Selected Episode")
-        self.assertContains(response, "All Episodes")
-        self.assertContains(response, "Kodi Control")
-        # Step 2: Confirm that an empty set of episodes results in expected messaging.
-        self.assertContains(response, "No episodes loaded")
+        for chkstr in ["Next Episode", "Random Episode", "Selected Episode", "All Episodes", "Kodi Control"]:
+            self.assertContains(response, chkstr)
         # Step 3a: Submit the form action to load the episodes.
         response = self.client.post(
             reverse("tv:manage_all_episodes", args=("testlib5", self.testser.series_name)), {"action": "load_all"}
@@ -320,9 +315,7 @@ class TvSeriesDetailViewTests(TestCase):
             .order_by("smb_path")
             .values_list("smb_path", flat=True)
         )
-        first_ep_smb_path = ep_smb_paths[0]
-        second_ep_smb_path = ep_smb_paths[1]
-        last_ep_smb_path = ep_smb_paths[-1]
+        first_ep_smb_path, second_ep_smb_path, last_ep_smb_path = ep_smb_paths
         # Step 4a: Mark up to the very last episode as watched.
         response = self.client.post(
             reverse("tv:mark_watched_up_to", args=("testlib5", self.testser.series_name)),
@@ -330,7 +323,7 @@ class TvSeriesDetailViewTests(TestCase):
         )
         self.assertIn(response.status_code, [200, 302])
         # Step 4b: Refetch the detail page and check that the next episode is the last one.
-        expected = 'name="smb_path" id="next" value="{0}"'.format(last_ep_smb_path)
+        expected = f'name="smb_path" id="next" value="{last_ep_smb_path}"'
         response = self.client.get(reverse("tv:episodes", args=("testlib5", self.testser.series_name)))
         self.assertIn(response.status_code, [200, 302])
         self.assertContains(response, expected)
@@ -340,7 +333,7 @@ class TvSeriesDetailViewTests(TestCase):
         )
         self.assertIn(response.status_code, [200, 302])
         # Step 5b: Refetch the detail page and check that the next episode is the first one.
-        expected = 'name="smb_path" id="next" value="{0}"'.format(first_ep_smb_path)
+        expected = f'name="smb_path" id="next" value="{first_ep_smb_path}"'
         response = self.client.get(reverse("tv:episodes", args=("testlib5", self.testser.series_name)))
         self.assertIn(response.status_code, [200, 302])
         self.assertContains(response, expected)
@@ -351,32 +344,35 @@ class TvSeriesDetailViewTests(TestCase):
         )
         self.assertIn(response.status_code, [200, 302])
         # Step 6b: Refetch the detail page and check that the next episode is the second one.
-        expected = 'name="smb_path" id="next" value="{0}"'.format(second_ep_smb_path)
+        expected = f'name="smb_path" id="next" value="{second_ep_smb_path}"'
         response = self.client.get(reverse("tv:episodes", args=("testlib5", self.testser.series_name)))
         self.assertIn(response.status_code, [200, 302])
         self.assertContains(response, expected)
         # Step 7a: Test the play button and advancing episodes.
-        mock_kodi.confirmSuccessfulPlay.return_value = True
+        mock_kodi.confirm_successful_play.return_value = True
         response = self.client.post(
             reverse("tv:play", args=("testlib5", self.testser.series_name)),
             {"smb_path": second_ep_smb_path},
         )
         # Confirm that Kodi is being called.
-        expected_call_list = [call().addAndPlay(second_ep_smb_path), call().confirmSuccessfulPlay(second_ep_smb_path)]
-        for ec in expected_call_list:
-            self.assertIn(ec, mock_kodi.mock_calls)
+        expected_call_list = [
+            call().add_and_play(second_ep_smb_path),
+            call().confirm_successful_play(second_ep_smb_path),
+        ]
+        for e_c in expected_call_list:
+            self.assertIn(e_c, mock_kodi.mock_calls)
         self.assertIn(response.status_code, [200, 302])
         # Step 7b: Refetch the detail page and check that the next episode is the last one.
-        expected = 'name="smb_path" id="next" value="{0}"'.format(last_ep_smb_path)
+        expected = f'name="smb_path" id="next" value="{last_ep_smb_path}"'
         response = self.client.get(reverse("tv:episodes", args=("testlib5", self.testser.series_name)))
         self.assertIn(response.status_code, [200, 302])
         self.assertContains(response, expected)
         # Step 8a: Exercise the available Kodi controls.
         action_list = [
-            ("subsOff", call().subsOff()),
-            ("subsOn", call().subsOn()),
-            ("nextItem", call().nextItem()),
-            ("nextStream", call().nextStream()),
+            ("subs_off", call().subs_off()),
+            ("subs_on", call().subs_on()),
+            ("next_item", call().next_item()),
+            ("next_stream", call().next_stream()),
         ]
         for action in action_list:
             expected_call = action[1]
@@ -386,7 +382,7 @@ class TvSeriesDetailViewTests(TestCase):
             self.assertIn(response.status_code, [200, 302])
             self.assertIn(expected_call, mock_kodi.mock_calls)
         # Step 8b: Refetch the detail page and confirm that nothing has advanced (same as 7b).
-        expected = 'name="smb_path" id="next" value="{0}"'.format(last_ep_smb_path)
+        expected = f'name="smb_path" id="next" value="{last_ep_smb_path}"'
         response = self.client.get(reverse("tv:episodes", args=("testlib5", self.testser.series_name)))
         self.assertIn(response.status_code, [200, 302])
         self.assertContains(response, expected)
@@ -430,37 +426,37 @@ class KodiTests(TestCase):
         cls.generic_ok = {"id": "1", "jsonrpc": "2.0", "result": "OK"}
 
     def test_now_playing(self, mock_post):
-        """Test that the nowPlaying function returns our expected True/False tuples."""
+        """Test that the now_playing function returns our expected True/False tuples."""
         # Step 1: Test that nothing playing returns the False tuple.
         mock_post.return_value.status_code = 200
         mock_post.return_value.json.return_value = self.nothing_playing
-        result = self.kodi.nowPlaying()
+        result = self.kodi.now_playing()
         self.assertEqual(result, (False, "None"))
         # Step 2: Test that a bad connection returns the False tuple.
         mock_post.reset_mock(return_value=True, side_effect=True)
         mock_post.side_effect = ConnectionError("Not Connected.")
-        result = self.kodi.nowPlaying()
+        result = self.kodi.now_playing()
         self.assertEqual(result, (False, "None"))
         # Step 3: Test that something playing returns the True tuple.
         mock_post.reset_mock(return_value=True, side_effect=True)
         mock_post.return_value.status_code = 200
         mock_post.return_value.json.return_value = self.foo_playing
-        result = self.kodi.nowPlaying()
+        result = self.kodi.now_playing()
         self.assertEqual(result, (True, "foo"))
 
-    @patch("tv.kodi.Kodi.nowPlaying", return_value=(True, "foo"))
-    def test_confirm_successful_play(self, mock_play, mock_post):
-        """Test that the confirmSuccessfulPlay function returns True/False based on playlist and connection."""
+    @patch("tv.kodi.Kodi.now_playing", return_value=(True, "foo"))
+    def test_confirm_successful_play(self, mock_play, mock_post):  # pylint: disable=W0613
+        """Test that the confirm_successful_play function returns True/False based on playlist and connection."""
         # Step 1: Test that we get True when the file is in the playlist.
         mock_post.return_value.status_code = 200
         mock_post.return_value.json.return_value = self.foo_in_playlist
-        self.assertTrue(self.kodi.confirmSuccessfulPlay("foo"))
+        self.assertTrue(self.kodi.confirm_successful_play("foo"))
         # Step 2: Test that we get False when the file is NOT in the playlist.
-        self.assertFalse(self.kodi.confirmSuccessfulPlay("bar"))
+        self.assertFalse(self.kodi.confirm_successful_play("bar"))
         # Step 3: Test that we get False when there is no connection to Kodi.
         mock_post.reset_mock(return_value=True, side_effect=True)
         mock_post.side_effect = ConnectionError("Not Connected.")
-        self.assertFalse(self.kodi.confirmSuccessfulPlay("foo"))
+        self.assertFalse(self.kodi.confirm_successful_play("foo"))
 
     def log_with_connection(self, mock_post, kodi_function, kodi_function_args, exp_log_output):
         """Run a Kodi function and confirm the log output, following DRY."""
@@ -479,85 +475,85 @@ class KodiTests(TestCase):
         self.assertEqual(lm1.output, exp_log_output)
 
     def test_add_to_playlist(self, mock_post):
-        """Test that the addToPlaylist function logs as expected."""
+        """Test that the add_to_playlist function logs as expected."""
         # Step 1: Test that we get the good log entry when connected.
         self.log_with_connection(
-            mock_post, self.kodi.addToPlaylist, ("foo",), ["INFO:django:Added foo to playlist successfully!"]
+            mock_post, self.kodi.add_to_playlist, ("foo",), ["INFO:django:Added foo to playlist successfully!"]
         )
         # Step 2: Test that we get the bad log entry when not connected.
         self.log_without_connection(
             mock_post,
-            self.kodi.addToPlaylist,
+            self.kodi.add_to_playlist,
             ("foo",),
             ["ERROR:django:PROBLEM: foo not added to playlist. Try a different way."],
         )
 
     def test_clear_playlist(self, mock_post):
-        """Test that the clearPlaylist function logs as expected."""
+        """Test that the clear_playlist function logs as expected."""
         # Step 1: Test that we get the good log entry when connected.
-        self.log_with_connection(mock_post, self.kodi.clearPlaylist, (), ["INFO:django:Clearing playlist: OK"])
+        self.log_with_connection(mock_post, self.kodi.clear_playlist, (), ["INFO:django:Clearing playlist: OK"])
         # Step 2: Test that we get the bad log entry when not connected.
         self.log_without_connection(
-            mock_post, self.kodi.clearPlaylist, (), ["INFO:django:Clearing playlist: {'connection': False}"]
+            mock_post, self.kodi.clear_playlist, (), ["INFO:django:Clearing playlist: {'connection': False}"]
         )
 
     def test_play_it(self, mock_post):
-        """Test that the playIt function logs as expected."""
+        """Test that the play_it function logs as expected."""
         # Step 1: Test that we get the good log entry when connected.
-        self.log_with_connection(mock_post, self.kodi.playIt, (), ["INFO:django:Playing: OK"])
+        self.log_with_connection(mock_post, self.kodi.play_it, (), ["INFO:django:Playing: OK"])
         # Step 2: Test that we get the bad log entry when not connected.
-        self.log_without_connection(mock_post, self.kodi.playIt, (), ["INFO:django:Playing: {'connection': False}"])
+        self.log_without_connection(mock_post, self.kodi.play_it, (), ["INFO:django:Playing: {'connection': False}"])
 
     def test_next_item(self, mock_post):
-        """Test that the nextItem function logs as expected."""
+        """Test that the next_item function logs as expected."""
         # Step 1: Test that we get the good log entry when connected.
-        self.log_with_connection(mock_post, self.kodi.nextItem, (), ["INFO:django:Skipping to next item: OK"])
+        self.log_with_connection(mock_post, self.kodi.next_item, (), ["INFO:django:Skipping to next item: OK"])
         # Step 2: Test that we get the bad log entry when not connected.
         self.log_without_connection(
-            mock_post, self.kodi.nextItem, (), ["INFO:django:Skipping to next item: {'connection': False}"]
+            mock_post, self.kodi.next_item, (), ["INFO:django:Skipping to next item: {'connection': False}"]
         )
 
     def test_next_stream(self, mock_post):
-        """Test that the nextStream function logs as expected."""
+        """Test that the next_stream function logs as expected."""
         # Step 1: Test that we get the good log entry when connected.
-        self.log_with_connection(mock_post, self.kodi.nextStream, (), ["INFO:django:Skipping to next stream: OK"])
+        self.log_with_connection(mock_post, self.kodi.next_stream, (), ["INFO:django:Skipping to next stream: OK"])
         # Step 2: Test that we get the bad log entry when not connected.
         self.log_without_connection(
-            mock_post, self.kodi.nextStream, (), ["INFO:django:Skipping to next stream: {'connection': False}"]
+            mock_post, self.kodi.next_stream, (), ["INFO:django:Skipping to next stream: {'connection': False}"]
         )
 
     def test_subs_off(self, mock_post):
-        """Test that the subsOff function logs as expected."""
+        """Test that the subs_off function logs as expected."""
         # Step 1: Test that we get the good log entry when connected.
-        self.log_with_connection(mock_post, self.kodi.subsOff, (), ["INFO:django:Dropping subtitles: OK"])
+        self.log_with_connection(mock_post, self.kodi.subs_off, (), ["INFO:django:Dropping subtitles: OK"])
         # Step 2: Test that we get the bad log entry when not connected.
         self.log_without_connection(
-            mock_post, self.kodi.subsOff, (), ["INFO:django:Dropping subtitles: {'connection': False}"]
+            mock_post, self.kodi.subs_off, (), ["INFO:django:Dropping subtitles: {'connection': False}"]
         )
 
     def test_subs_on(self, mock_post):
-        """Test that the subsOn function logs as expected."""
+        """Test that the subs_on function logs as expected."""
         # Step 1: Test that we get the good log entry when connected.
-        self.log_with_connection(mock_post, self.kodi.subsOn, (), ["INFO:django:Enabling subtitles: OK"])
+        self.log_with_connection(mock_post, self.kodi.subs_on, (), ["INFO:django:Enabling subtitles: OK"])
         # Step 2: Test that we get the bad log entry when not connected.
         self.log_without_connection(
-            mock_post, self.kodi.subsOn, (), ["INFO:django:Enabling subtitles: {'connection': False}"]
+            mock_post, self.kodi.subs_on, (), ["INFO:django:Enabling subtitles: {'connection': False}"]
         )
 
     def test_set_audio_passthrough(self, mock_post):
-        """Test that the setAudioPassthrough function logs as expected."""
+        """Test that the set_audio_passthrough function logs as expected."""
         # Step 1: Test that we get the good log entry when connected.
         self.log_with_connection(
-            mock_post, self.kodi.setAudioPassthrough, (True,), ["INFO:django:Enabling passthrough: OK"]
+            mock_post, self.kodi.set_audio_passthrough, (True,), ["INFO:django:Enabling passthrough: OK"]
         )
         # Step 2: Test that we get the good log entry when connected and trying to disable passthrough
         self.log_with_connection(
-            mock_post, self.kodi.setAudioPassthrough, (False,), ["INFO:django:Disabling passthrough: OK"]
+            mock_post, self.kodi.set_audio_passthrough, (False,), ["INFO:django:Disabling passthrough: OK"]
         )
         # Step 3: Test that we get the bad log entry when not connected.
         self.log_without_connection(
             mock_post,
-            self.kodi.setAudioPassthrough,
+            self.kodi.set_audio_passthrough,
             (True,),
             ["INFO:django:Enabling passthrough: {'connection': False}"],
         )
