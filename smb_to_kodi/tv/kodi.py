@@ -104,6 +104,12 @@ class Kodi:
             self.add_to_playlist(filename)
             self.play_it()
 
+    def get_audio_passthrough(self):
+        """Fetch the current state of the audio passthrough setting."""
+        specific_params = {"method": "Settings.GetSettingValue", "params": {"setting": "audiooutput.passthrough"}}
+        res = self._runit(specific_params)
+        return res.get("result").get("value", False)
+
     def set_audio_passthrough(self, passtf):
         """Enable or disable audio passthrough based on the True/False of the passtf argument."""
         specific_params = {

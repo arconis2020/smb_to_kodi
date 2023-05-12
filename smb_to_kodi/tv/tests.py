@@ -291,14 +291,28 @@ class TvSeriesDetailViewTests(TestCase):
         cls.testser = Series(series_name=os.path.basename(cls.dfac.series[0].name), library=cls.testlib)
         cls.testser.save()
 
+    def check_for_content(self, expected_content):
+        """Check the detail page repeatedly for content."""
+        response = self.client.get(reverse("tv:episodes", args=("testlib5", self.testser.series_name)))
+        self.assertIn(response.status_code, [200, 302])
+        self.assertContains(response, expected_content)
+
     @patch("tv.views.Kodi")
     def test_full_page_behavior(self, mock_kodi):
         """Exercise all parts of the series detail page."""
         # Must be a single test to avoid race conditions with data.
         # Step 1: Test the presence of various elements.
+        mock_kodi.get_audio_passthrough.return_value = True
         response = self.client.get(reverse("tv:episodes", args=("testlib5", self.testser.series_name)))
         self.assertIn(response.status_code, [200, 302])
-        for chkstr in ["Next Episode", "Random Episode", "Selected Episode", "All Episodes", "Kodi Control"]:
+        for chkstr in [
+            "Next Episode",
+            "Random Episode",
+            "Selected Episode",
+            "All Episodes",
+            "Kodi Control",
+            "Disable audio passthrough",
+        ]:
             self.assertContains(response, chkstr)
         # Step 3a: Submit the form action to load the episodes.
         response = self.client.post(
@@ -306,9 +320,7 @@ class TvSeriesDetailViewTests(TestCase):
         )
         self.assertIn(response.status_code, [200, 302])
         # Step 3b: Refetch the detail page and check for episode names.
-        response = self.client.get(reverse("tv:episodes", args=("testlib5", self.testser.series_name)))
-        self.assertIn(response.status_code, [200, 302])
-        self.assertContains(response, self.dfac.episodes[0].name)
+        self.check_for_content(self.dfac.episodes[0].name)
         # Set up some important variables for later.
         ep_smb_paths = list(
             Episode.objects.filter(series=self.testser.series_name)
@@ -323,20 +335,14 @@ class TvSeriesDetailViewTests(TestCase):
         )
         self.assertIn(response.status_code, [200, 302])
         # Step 4b: Refetch the detail page and check that the next episode is the last one.
-        expected = f'name="smb_path" id="next" value="{last_ep_smb_path}"'
-        response = self.client.get(reverse("tv:episodes", args=("testlib5", self.testser.series_name)))
-        self.assertIn(response.status_code, [200, 302])
-        self.assertContains(response, expected)
+        self.check_for_content(f'name="smb_path" id="next" value="{last_ep_smb_path}"')
         # Step 5a: Mark all episodes as unwatched.
         response = self.client.post(
             reverse("tv:manage_all_episodes", args=("testlib5", self.testser.series_name)), {"action": "mark_unwatched"}
         )
         self.assertIn(response.status_code, [200, 302])
         # Step 5b: Refetch the detail page and check that the next episode is the first one.
-        expected = f'name="smb_path" id="next" value="{first_ep_smb_path}"'
-        response = self.client.get(reverse("tv:episodes", args=("testlib5", self.testser.series_name)))
-        self.assertIn(response.status_code, [200, 302])
-        self.assertContains(response, expected)
+        self.check_for_content(f'name="smb_path" id="next" value="{first_ep_smb_path}"')
         # Step 6a: Mark the first episode as watched.
         response = self.client.post(
             reverse("tv:watched", args=("testlib5", self.testser.series_name)),
@@ -344,10 +350,7 @@ class TvSeriesDetailViewTests(TestCase):
         )
         self.assertIn(response.status_code, [200, 302])
         # Step 6b: Refetch the detail page and check that the next episode is the second one.
-        expected = f'name="smb_path" id="next" value="{second_ep_smb_path}"'
-        response = self.client.get(reverse("tv:episodes", args=("testlib5", self.testser.series_name)))
-        self.assertIn(response.status_code, [200, 302])
-        self.assertContains(response, expected)
+        self.check_for_content(f'name="smb_path" id="next" value="{second_ep_smb_path}"')
         # Step 7a: Test the play button and advancing episodes.
         mock_kodi.confirm_successful_play.return_value = True
         response = self.client.post(
@@ -363,16 +366,14 @@ class TvSeriesDetailViewTests(TestCase):
             self.assertIn(e_c, mock_kodi.mock_calls)
         self.assertIn(response.status_code, [200, 302])
         # Step 7b: Refetch the detail page and check that the next episode is the last one.
-        expected = f'name="smb_path" id="next" value="{last_ep_smb_path}"'
-        response = self.client.get(reverse("tv:episodes", args=("testlib5", self.testser.series_name)))
-        self.assertIn(response.status_code, [200, 302])
-        self.assertContains(response, expected)
+        self.check_for_content(f'name="smb_path" id="next" value="{last_ep_smb_path}"')
         # Step 8a: Exercise the available Kodi controls.
         action_list = [
             ("subs_off", call().subs_off()),
             ("subs_on", call().subs_on()),
             ("next_item", call().next_item()),
             ("next_stream", call().next_stream()),
+            ("passthrough", call().set_audio_passthrough(False)),
         ]
         for action in action_list:
             expected_call = action[1]
@@ -382,10 +383,7 @@ class TvSeriesDetailViewTests(TestCase):
             self.assertIn(response.status_code, [200, 302])
             self.assertIn(expected_call, mock_kodi.mock_calls)
         # Step 8b: Refetch the detail page and confirm that nothing has advanced (same as 7b).
-        expected = f'name="smb_path" id="next" value="{last_ep_smb_path}"'
-        response = self.client.get(reverse("tv:episodes", args=("testlib5", self.testser.series_name)))
-        self.assertIn(response.status_code, [200, 302])
-        self.assertContains(response, expected)
+        self.check_for_content(f'name="smb_path" id="next" value="{last_ep_smb_path}"')
         # Step 9: Test series deletion.
         response = self.client.post(
             reverse("tv:manage_all_episodes", args=("testlib5", self.testser.series_name)), {"action": "delete_series"}
@@ -557,3 +555,19 @@ class KodiTests(TestCase):
             (True,),
             ["INFO:django:Enabling passthrough: {'connection': False}"],
         )
+
+    def test_get_audio_passthrough(self, mock_post):
+        """Test that the get_audio_passthrough function returns True/False as expected."""
+        # Step 1: Test that we get True when passthrough is enabled.
+        mock_post.return_value.status_code = 200
+        mock_post.return_value.json.return_value = {"id": "1", "jsonrpc": "2.0", "result": {"value": True}}
+        self.assertTrue(self.kodi.get_audio_passthrough())
+        # Step 2: Test that we get False when passthrough is disabled.
+        mock_post.reset_mock(return_value=True, side_effect=True)
+        mock_post.return_value.status_code = 200
+        mock_post.return_value.json.return_value = {"id": "1", "jsonrpc": "2.0", "result": {"value": False}}
+        self.assertFalse(self.kodi.get_audio_passthrough())
+        # Step 3: Test that we get False when there is no connection.
+        mock_post.reset_mock(return_value=True, side_effect=True)
+        mock_post.side_effect = ConnectionError("Not Connected.")
+        self.assertFalse(self.kodi.get_audio_passthrough())

@@ -61,6 +61,7 @@ def series_detail(request, shortname, series):
     unwatched = this_series.filter(watched=False).order_by("smb_path")
     next_episode = unwatched[0] if bool(unwatched) else "No episodes loaded"
     random_episode = choice(unwatched) if bool(unwatched) else "No episodes loaded"
+    current_passthrough = Kodi().get_audio_passthrough()
     return render(
         request,
         "tv/series_detail.html",
@@ -70,6 +71,7 @@ def series_detail(request, shortname, series):
             "series_name": series,
             "shortname": shortname,
             "eplist": this_series,
+            "passthrough_state": current_passthrough,
         },
     )
 
@@ -135,6 +137,9 @@ def kodi_control(request, shortname, series):
         k.next_item()
     elif this_action == "next_stream":
         k.next_stream()
+    elif this_action == "passthrough":
+        # The page essentially gives you the option to toggle, so let's do that here.
+        k.set_audio_passthrough(not k.get_audio_passthrough())
     return HttpResponseRedirect(reverse("tv:episodes", args=(shortname, series)))
 
 

@@ -58,6 +58,12 @@
     <label for="nextItem">Advance to the next playlist item.</label><br/>
     <input type="radio" name="action" id="nextStream" value="nextStream">
     <label for="nextStream">Switch to the next audio stream.</label><br/>
+    <input type="radio" name="action" id="passthrough" value="passthrough">
+    {% if passthrough_state %}
+    <label for="passthrough">Disable audio passthrough.</label><br/>
+    {% else %}
+    <label for="passthrough">Enable audio passthrough.</label><br/>
+    {% endif %}
 </fieldset>
 <input type="submit" value="Submit" formaction="{% url 'tv:kodi_control' shortname=shortname series=series_name %}">
 </form>
