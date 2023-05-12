@@ -33,6 +33,7 @@
 </fieldset>
 <input type="submit" value="Play" formaction="{% url 'tv:play' shortname=shortname series=series_name %}">
 <input type="submit" value="Mark watched up to" formaction="{% url 'tv:mark_watched_up_to' shortname=shortname series=series_name %}">
+<input type="submit" value="Mark as watched" formaction="{% url 'tv:watched' shortname=shortname series=series_name %}">
 <form method="post">
 {% csrf_token %}
 <fieldset>
