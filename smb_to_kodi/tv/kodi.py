@@ -19,7 +19,7 @@ class Kodi:
         paramdict = self.struct.copy()
         paramdict.update(specific_params)
         try:
-            res = requests.post(url=self.url, json=paramdict, headers=self.headers, timeout=30)
+            res = requests.post(url=self.url, json=paramdict, headers=self.headers, timeout=3)
             return res.json()
         except requests.exceptions.ConnectionError:
             return {"result": {"connection": False}}
