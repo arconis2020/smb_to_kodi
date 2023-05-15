@@ -51,14 +51,14 @@
 {% csrf_token %}
 <fieldset>
     <legend><h2>Kodi Control</h2></legend>
-    <input type="radio" name="action" id="subsOff" value="subsOff">
-    <label for="subsOff">Turn off subtitles.</label><br/>
-    <input type="radio" name="action" id="subsOn" value="subsOn">
-    <label for="subsOn">Turn on subtitles.</label><br/>
-    <input type="radio" name="action" id="nextItem" value="nextItem">
-    <label for="nextItem">Advance to the next playlist item.</label><br/>
-    <input type="radio" name="action" id="nextStream" value="nextStream">
-    <label for="nextStream">Switch to the next audio stream.</label><br/>
+    <input type="radio" name="action" id="subs_off" value="subs_off">
+    <label for="subs_off">Turn off subtitles.</label><br/>
+    <input type="radio" name="action" id="subs_on" value="subs_on">
+    <label for="subs_on">Turn on subtitles.</label><br/>
+    <input type="radio" name="action" id="next_item" value="next_item">
+    <label for="next_item">Advance to the next playlist item.</label><br/>
+    <input type="radio" name="action" id="next_stream" value="next_stream">
+    <label for="next_stream">Switch to the next audio stream.</label><br/>
     <input type="radio" name="action" id="passthrough" value="passthrough">
     {% if passthrough_state %}
     <label for="passthrough">Disable audio passthrough.</label><br/>
