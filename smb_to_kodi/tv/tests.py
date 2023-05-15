@@ -351,7 +351,15 @@ class TvSeriesDetailViewTests(TestCase):
         self.assertIn(response.status_code, [200, 302])
         # Step 6b: Refetch the detail page and check that the next episode is the second one.
         self.check_for_content(f'name="smb_path" id="next" value="{second_ep_smb_path}"')
+        # Step 6c: Mark all episodes as watched.
+        response = self.client.post(
+            reverse("tv:manage_all_episodes", args=("testlib5", self.testser.series_name)), {"action": "mark_watched"}
+        )
+        self.assertIn(response.status_code, [200, 302])
+        # Step 6d: Refetch the detail page and check that the next episode is empty.
+        self.check_for_content(f'name="smb_path" id="next" value="No episodes loaded"')
         # Step 7a: Test the play button and advancing episodes.
+        Episode.objects.filter(smb_path__in=[second_ep_smb_path, last_ep_smb_path]).update(watched=False)
         mock_kodi.confirm_successful_play.return_value = True
         response = self.client.post(
             reverse("tv:play", args=("testlib5", self.testser.series_name)),

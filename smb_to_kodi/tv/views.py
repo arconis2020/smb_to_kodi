@@ -108,6 +108,8 @@ def manage_all_episodes(request, shortname, series):
         this_series.add_all_episodes()
     elif this_action == "mark_unwatched":
         this_series.episode_set.all().update(watched=False)
+    elif this_action == "mark_watched":
+        this_series.episode_set.all().update(watched=True)
     elif this_action == "delete_series":
         this_series.delete()
         return HttpResponseRedirect(reverse("tv:library", args=(shortname,)))
