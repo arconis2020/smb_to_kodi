@@ -1,6 +1,5 @@
 """All data model objects for the tv application."""
-from os import walk
-from os.path import basename, join, relpath, realpath
+from os.path import basename, join, relpath
 from pathlib import Path
 import mimetypes
 import unicodedata
@@ -67,14 +66,13 @@ class Series(models.Model):
         """Find all video files in this folder, and add them as episodes for this series."""
         # First, find all of the episodes.
         found = []
-        for root, _, files in walk(join(self.library.path, self.series_name)):
-            for this_file in files:
-                filetype = mimetypes.guess_type(this_file)[0]
-                if filetype is None:
-                    continue
-                if filetype.startswith("video/"):
-                    this_smb_path = self.library.get_smb_path(realpath(join(root, this_file)))
-                    found.append(this_smb_path)
+        seriesdir = join(self.library.path, self.series_name)
+        for path in Path(seriesdir).rglob("*"):
+            filetype = mimetypes.guess_type(path)[0]
+            if filetype is None:
+                continue
+            if filetype.startswith("video/"):
+                found.append(str(path))
         # Now remove anything that wasn't found on disk.
         self.episode_set.exclude(smb_path__in=found).delete()
         # Now add anything that is new on disk.
