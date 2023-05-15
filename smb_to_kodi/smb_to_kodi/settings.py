@@ -128,11 +128,18 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 LOGGING = {
     "version": 1,
     "disable_existing_loggers": False,
+    "formatters": {
+        "main": {
+            "format": "{asctime} {levelname} {module} {message}",
+            "style": "{",
+        },
+    },
     "handlers": {
         "file": {
             "level": "DEBUG",
             "class": "logging.FileHandler",
             "filename": "logs/debug.log",
+            "formatter": "main",
         },
     },
     "loggers": {
