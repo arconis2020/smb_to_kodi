@@ -1,5 +1,6 @@
+{% include "./header.html" %}
 <h1>{{ series_name }}</h1>
-<a href="{% url 'tv:library' shortname %}">Back to Series List</a>
+<a class="link" href="{% url 'tv:library' shortname %}">Back to Series List</a>
 <form method="post">
 {% csrf_token %}
 <fieldset>
@@ -70,3 +71,4 @@
 </fieldset>
 <input type="submit" value="Submit" formaction="{% url 'tv:kodi_control' shortname=shortname series=series_name %}">
 </form>
+{% include "./footer.html" %}

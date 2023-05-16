@@ -5,7 +5,7 @@
         {% if library_list %}
             <ul>
             {% for library in library_list %}
-               <li><a href="{% url 'tv:library' library.shortname %}">{{ library.path }}</a></li>
+               <li><a class="link" href="{% url 'tv:library' library.shortname %}">{{ library.path }}</a></li>
             {% endfor %}
             </ul>
         {% else %}

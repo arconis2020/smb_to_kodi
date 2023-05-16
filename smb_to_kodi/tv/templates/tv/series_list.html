@@ -1,12 +1,12 @@
 {% include "./header.html" %}
-<a href="{% url 'tv:index' %}">Back to Library List</a>
+<a class="link" href="{% url 'tv:index' %}">Back to Library List</a>
 <div class="flex-container">
     <div>
         <h1>Active Series List</h1>
         {% if active_series_list %}
             <ul>
             {% for series in active_series_list %}
-                <li><a href="{% url 'tv:episodes' shortname=library_shortname series=series.series_name %}">{{ series.series_name }}</a></li>
+                <li><a class="link" href="{% url 'tv:episodes' shortname=library_shortname series=series.series_name %}">{{ series.series_name }}</a></li>
             {% endfor %}
             </ul>
         {% else %}
@@ -30,7 +30,7 @@
         {% if new_series_list %}
             <ul>
             {% for series in new_series_list %}
-                <li><a href="{% url 'tv:episodes' shortname=library_shortname series=series.series_name %}">{{ series.series_name }}</a></li>
+                <li><a class="link" href="{% url 'tv:episodes' shortname=library_shortname series=series.series_name %}">{{ series.series_name }}</a></li>
             {% endfor %}
             </ul>
         {% else %}
@@ -53,7 +53,7 @@
         {% if complete_series_list %}
             <ul>
             {% for series in complete_series_list %}
-                <li><a href="{% url 'tv:episodes' shortname=library_shortname series=series.series_name %}">{{ series.series_name }}</a></li>
+                <li><a class="link" href="{% url 'tv:episodes' shortname=library_shortname series=series.series_name %}">{{ series.series_name }}</a></li>
             {% endfor %}
             </ul>
         {% else %}

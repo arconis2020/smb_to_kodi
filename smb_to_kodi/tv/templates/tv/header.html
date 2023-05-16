@@ -13,6 +13,34 @@
   text-align: left;
   border: 3px outset lightblue;
 }
+.body {
+    background-color: #dddddd;
+    color: #373737;
+}
+.dark-mode {
+    background-color: #373737;
+    color: #dddddd;
+}
+.link {
+    color: #3092F5;
+}
 </style>
 </head>
-<body>
+<body onload="set_light_dark()">
+<button onclick="toggle_light_dark()" style="float: right;">Toggle dark mode</button><br/>
+<script>
+function set_light_dark() {
+    const dm = localStorage.getItem("darkMode");  // Treated as a string
+    if (dm === "true") {
+        var element = document.body;
+        if (! element.classList.contains("dark-mode")) {
+            element.classList.toggle("dark-mode");
+        }
+    }
+}
+function toggle_light_dark() {
+    var element = document.body;
+    element.classList.toggle("dark-mode");
+    localStorage.setItem("darkMode", element.classList.contains("dark-mode"));
+}
+</script>
