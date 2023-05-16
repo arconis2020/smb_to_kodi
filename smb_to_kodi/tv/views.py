@@ -1,6 +1,5 @@
 """Class-based and function-based view backings for the URLs in the tv app."""
 from random import choice
-from django.db.models import Count
 from django.http import HttpResponseRedirect, Http404
 from django.shortcuts import render
 from django.urls import reverse
@@ -33,16 +32,11 @@ class SeriesView(generic.ListView):
         """Add page context items for better rendering."""
         context = super().get_context_data(**kwargs)
         context["library_shortname"] = self.kwargs["shortname"]
-        context["active_series_list"] = (
-            Series.objects.filter(library__shortname=self.kwargs["shortname"])
-            .annotate(c=Count("episode"))
-            .filter(c__gt=0)
-        )
-        context["available_series_list"] = (
-            Series.objects.filter(library__shortname=self.kwargs["shortname"])
-            .annotate(c=Count("episode"))
-            .filter(c__lt=1)
-        )
+        (
+            context["active_series_list"],
+            context["new_series_list"],
+            context["complete_series_list"],
+        ) = Library.objects.get(shortname=self.kwargs["shortname"]).get_series_by_state()
         context["current_player"] = Player.objects.get(pk=1).address if Player.objects.count() == 1 else ""
         return context
 

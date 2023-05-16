@@ -26,15 +26,15 @@
         </form>
     </div>
     <div>
-        <h1>Available Series List</h1>
-        {% if available_series_list %}
+        <h1>New Series List</h1>
+        {% if new_series_list %}
             <ul>
-            {% for series in available_series_list %}
+            {% for series in new_series_list %}
                 <li><a href="{% url 'tv:episodes' shortname=library_shortname series=series.series_name %}">{{ series.series_name }}</a></li>
             {% endfor %}
             </ul>
         {% else %}
-            <p>No series are available.</p>
+            <p>No series are new.</p>
         {% endif %}
     </div>
     <div>
@@ -47,6 +47,18 @@
         </fieldset>
         <input type="submit" value="Submit" formaction="{% url 'tv:delete_library' %}">
         </form>
+    </div>
+    <div>
+        <h1>Complete Series List</h1>
+        {% if complete_series_list %}
+            <ul>
+            {% for series in complete_series_list %}
+                <li><a href="{% url 'tv:episodes' shortname=library_shortname series=series.series_name %}">{{ series.series_name }}</a></li>
+            {% endfor %}
+            </ul>
+        {% else %}
+            <p>No series are complete.</p>
+        {% endif %}
     </div>
 </div>
 {% include "./footer.html" %}

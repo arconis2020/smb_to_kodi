@@ -5,6 +5,7 @@ import tempfile
 import black
 import pycodestyle
 import pydocstyle
+from django.core.management import call_command
 from django.test import TestCase
 from django.urls import reverse
 from requests.exceptions import ConnectionError
@@ -152,7 +153,15 @@ class SeriesModelTests(TestCase):
 
     def test_add_all_episodes(self):
         """Confirm that all files are added as expected to the series."""
+        # Test adding all episodes from the model.
         self.testser.add_all_episodes()
+        self.assertEqual(Episode.objects.filter(series=self.testser).count(), 10)
+        # Test adding all episodes from the command line.
+        self.testser.episode_set.all().delete()
+        self.assertEqual(Episode.objects.filter(series=self.testser).count(), 0)
+        with self.assertLogs("django", level="INFO") as lm1:
+            call_command("syncdisk")
+        self.assertEqual(lm1.output, [f"INFO:django:Updating {self.testser.series_name} from disk."])
         self.assertEqual(Episode.objects.filter(series=self.testser).count(), 10)
 
 
@@ -246,7 +255,8 @@ class TvSeriesViewTests(TestCase):
         response = self.client.get(reverse("tv:library", args=("testlib4",)))
         self.assertIn(response.status_code, [200, 302])
         self.assertContains(response, "Active Series List")
-        self.assertContains(response, "Available Series List")
+        self.assertContains(response, "New Series List")
+        self.assertContains(response, "Complete Series List")
         self.assertContains(response, "Add Series")
         self.assertContains(response, "Delete Library")
         # Step 2: Test that you can add a series.
@@ -320,7 +330,7 @@ class TvSeriesDetailViewTests(TestCase):
         )
         self.assertIn(response.status_code, [200, 302])
         # Step 3b: Refetch the detail page and check for episode names.
-        self.check_for_content(self.dfac.episodes[0].name)
+        self.check_for_content(self.testlib.get_smb_path(self.dfac.episodes[0].name))
         # Set up some important variables for later.
         ep_smb_paths = list(
             Episode.objects.filter(series=self.testser.series_name)
@@ -357,7 +367,7 @@ class TvSeriesDetailViewTests(TestCase):
         )
         self.assertIn(response.status_code, [200, 302])
         # Step 6d: Refetch the detail page and check that the next episode is empty.
-        self.check_for_content(f'name="smb_path" id="next" value="No episodes loaded"')
+        self.check_for_content('name="smb_path" id="next" value="No episodes loaded"')
         # Step 7a: Test the play button and advancing episodes.
         Episode.objects.filter(smb_path__in=[second_ep_smb_path, last_ep_smb_path]).update(watched=False)
         mock_kodi.confirm_successful_play.return_value = True
