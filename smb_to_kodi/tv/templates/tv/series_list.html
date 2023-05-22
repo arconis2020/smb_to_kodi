@@ -1,8 +1,8 @@
 {% include "./header.html" %}
 <a class="link" href="{% url 'tv:index' %}">Back to Library List</a>
 <div class="flex-container">
-    <div>
-        <h1>Active Series List</h1>
+    <button class="collapsible default-open">Active Series List</button>
+    <div class="hidable">
         {% if active_series_list %}
             <ul>
             {% for series in active_series_list %}
@@ -13,20 +13,8 @@
             <p>No series are active.</p>
         {% endif %}
     </div>
-    <div>
-        <form method="post">
-        {% csrf_token %}
-        <fieldset>
-            <legend><h1>Add Series</h1></legend>
-            <label for="path">Series Name (use "all" to scan for all possible series):</label>
-            <input type="text" name="series_name" id="series_name" class="vTextField" maxlength="80" value="all"><br/>
-            <input type="hidden" name="library" id="library" value="{{ library_shortname }}"><br/>
-        </fieldset>
-        <input type="submit" value="Submit" formaction="{% url 'tv:add_series' shortname=library_shortname %}">
-        </form>
-    </div>
-    <div>
-        <h1>New Series List</h1>
+    <button class="collapsible">New Series List</button>
+    <div class="hidable">
         {% if new_series_list %}
             <ul>
             {% for series in new_series_list %}
@@ -37,19 +25,8 @@
             <p>No series are new.</p>
         {% endif %}
     </div>
-    <div>
-        <form method="post">
-        {% csrf_token %}
-        <fieldset>
-            <legend><h1>Delete Library</h1></legend>
-            <label for="library">{{ library_shortname }}</label>
-            <input type="hidden" name="library" id="library" value="{{ library_shortname }}"><br/>
-        </fieldset>
-        <input type="submit" value="Submit" formaction="{% url 'tv:delete_library' %}">
-        </form>
-    </div>
-    <div>
-        <h1>Complete Series List</h1>
+    <button class="collapsible">Complete Series List</button>
+    <div class="hidable">
         {% if complete_series_list %}
             <ul>
             {% for series in complete_series_list %}
@@ -59,6 +36,29 @@
         {% else %}
             <p>No series are complete.</p>
         {% endif %}
+    </div>
+    <button class="collapsible">Add Series</button>
+    <div class="hidable">
+        <form method="post">
+        {% csrf_token %}
+        <fieldset>
+            <label for="series_name">Series Name (use "all" to scan for all possible series):</label>
+            <input type="text" name="series_name" id="series_name" class="vTextField" maxlength="80" value="all"><br/>
+            <input type="hidden" name="library" id="library" value="{{ library_shortname }}"><br/>
+        </fieldset>
+        <input type="submit" value="Submit" formaction="{% url 'tv:add_series' shortname=library_shortname %}">
+        </form>
+    </div>
+    <button class="collapsible">Delete Library</button>
+    <div class="hidable">
+        <form method="post">
+        {% csrf_token %}
+        <fieldset>
+            <label for="library">{{ library_shortname }}</label>
+            <input type="hidden" name="library" id="library" value="{{ library_shortname }}"><br/>
+        </fieldset>
+        <input type="submit" value="Submit" formaction="{% url 'tv:delete_library' %}">
+        </form>
     </div>
 </div>
 {% include "./footer.html" %}

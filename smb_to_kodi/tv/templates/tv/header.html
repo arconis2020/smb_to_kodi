@@ -1,33 +1,95 @@
 <!DOCTYPE html>
 <html>
 <head>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
 <style>
 .flex-container {
-  display: flex;
-  flex-wrap: wrap;
-  align-content: space-between;
+    display: flex;
+    flex-wrap: wrap;
+    flex-direction: column;
+    align-content: space-between;
 }
 
 .flex-container > div {
-  width: 49%;
-  text-align: left;
-  border: 3px outset lightblue;
+    text-align: left;
+    border: 3px outset lightblue;
 }
-.body {
+
+body {
     background-color: #dddddd;
     color: #373737;
 }
+
+@media (max-width: 35rem) {
+    .conditional-break {
+        display: inline;
+    }
+}
+
+@media (min-width: 36rem) {
+    .conditional-break {
+        display: none;
+    }
+}
+
 .dark-mode {
     background-color: #373737;
     color: #dddddd;
 }
+
 .link {
     color: #3092F5;
+    font-size: 18pt;
 }
+
+.collapsible {
+    background-color: #777;
+    color: white;
+    cursor: pointer;
+    padding: 18px;
+    border: none;
+    text-align: left;
+    outline: none;
+    font-size: 20pt;
+    min-width: 300px;
+}
+
+.default-open {
+    @extend .collapsible
+}
+
+.active, .collapsible:hover {
+    background-color: #555;
+}
+
+.collapsible:after {
+    content: '\002B';
+    color: white;
+    font-weight: bold;
+    float: right;
+    margin-left: 30px;
+}
+
+.active:after {
+    content: "\2212";
+}
+
+.hidable {
+    padding: 0 18px;
+    max-height: 0;
+    overflow: hidden;
+    transition: max-height 0.2s ease-out;
+    font-size: 18pt;
+}
+
+select {
+    max-width: 280px;
+}
+
 </style>
 </head>
 <body onload="set_light_dark()">
-<button onclick="toggle_light_dark()" style="float: right;">Toggle dark mode</button><br/>
+<button onclick="toggle_light_dark()">Toggle dark mode</button><br/><br/>
 <script>
 function set_light_dark() {
     const dm = localStorage.getItem("darkMode");  // Treated as a string

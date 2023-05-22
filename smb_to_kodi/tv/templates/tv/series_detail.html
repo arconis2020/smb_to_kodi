@@ -1,74 +1,77 @@
 {% include "./header.html" %}
 <h1>{{ series_name }}</h1>
 <a class="link" href="{% url 'tv:library' shortname %}">Back to Series List</a>
+<div class="flex-container">
+<button class="collapsible default-open">Next Episode</button>
+<div class="hidable">
 <form method="post">
 {% csrf_token %}
-<fieldset>
-    <legend><h2>Next Episode</h2></legend>
-    <p>{{ next_episode.basename }}</p>
-    <input type="hidden" name="smb_path" id="next" value="{{ next_episode }}">
-</fieldset>
-<input type="submit" value="Play" formaction="{% url 'tv:play' shortname=shortname series=series_name %}" >
-<input type="submit" value="Mark as watched" formaction="{% url 'tv:watched' shortname=shortname series=series_name %}">
+<p>{{ next_episode.basename }}
+<input type="hidden" name="smb_path" id="next" value="{{ next_episode }}">
+<span class="conditional-break"><br/></span>
+{% include "./play_button.html" %}
+{% include "./maw_button.html" %}
+</p>
 </form>
+</div>
+<button class="collapsible default-open">Random Episode</button>
+<div class="hidable">
 <form method="post">
 {% csrf_token %}
-<fieldset>
-    <legend><h2>Random Episode</h2></legend>
-    <p>{{ random_episode.basename }}</p>
-    <input type="hidden" name="smb_path" id="next" value="{{ random_episode }}">
-</fieldset>
-<input type="submit" value="Play" formaction="{% url 'tv:play' shortname=shortname series=series_name %}">
-<input type="submit" value="Mark as watched" formaction="{% url 'tv:watched' shortname=shortname series=series_name %}">
+<p>{{ random_episode.basename }}
+<input type="hidden" name="smb_path" id="next" value="{{ random_episode }}">
+<span class="conditional-break"><br/></span>
+{% include "./play_button.html" %}
+{% include "./maw_button.html" %}
+</p>
 </form>
+</div>
+<button class="collapsible default-open">Selected Episode</button>
+<div class="hidable">
 <form method="post">
 {% csrf_token %}
-<fieldset>
-    <legend><h2>Selected Episode</h2></legend>
-    <label for="selected">Choose an episode:</label>
-    <select name="smb_path" id="selected">
-    {% for ep in eplist %}
-        <option value="{{ ep.smb_path }}">{{ ep.basename }}</option>
-    {% endfor %}
-    </select>
-</fieldset>
-<input type="submit" value="Play" formaction="{% url 'tv:play' shortname=shortname series=series_name %}">
-<input type="submit" value="Mark watched up to" formaction="{% url 'tv:mark_watched_up_to' shortname=shortname series=series_name %}">
-<input type="submit" value="Mark as watched" formaction="{% url 'tv:watched' shortname=shortname series=series_name %}">
-<form method="post">
-{% csrf_token %}
-<fieldset>
-    <legend><h2>All Episodes</h2></legend>
-    <input type="radio" name="action" id="load_all" value="load_all">
-    <label for="load_all">Sync episode list with disk (no changes to watched marks).</label><br/>
-    <input type="radio" name="action" id="mark_unwatched" value="mark_unwatched">
-    <label for="mark_unwatched">Mark all episodes unwatched.</label><br/>
-    <input type="radio" name="action" id="mark_watched" value="mark_watched">
-    <label for="mark_watched">Mark all episodes watched.</label><br/>
-    <input type="radio" name="action" id="delete_series" value="delete_series">
-    <label for="delete_series">Delete series from database (does not touch disk).</label>
-</fieldset>
-<input type="submit" value="Submit" formaction="{% url 'tv:manage_all_episodes' shortname=shortname series=series_name %}">
+<p><select name="smb_path" id="selected">
+{% for ep in eplist %}
+    <option value="{{ ep.smb_path }}">{{ ep.basename }}</option>
+{% endfor %}
+</select>
+<span class="conditional-break"><br/></span>
+{% include "./play_button.html" %}
+{% include "./maw_button.html" %}
+<input type="submit" value="&#9083" style="padding: 4px;" title="Mark watched up to (Check Through)" formaction="{% url 'tv:mark_watched_up_to' shortname=shortname series=series_name %}">
+</p>
 </form>
-<form method="post">
+</div>
+<button class="collapsible">All Episodes</button>
+<div class="hidable">
+<form method="post" action="{% url 'tv:manage_all_episodes' shortname=shortname series=series_name %}">
 {% csrf_token %}
-<fieldset>
-    <legend><h2>Kodi Control</h2></legend>
-    <input type="radio" name="action" id="subs_off" value="subs_off">
-    <label for="subs_off">Turn off subtitles.</label><br/>
-    <input type="radio" name="action" id="subs_on" value="subs_on">
-    <label for="subs_on">Turn on subtitles.</label><br/>
-    <input type="radio" name="action" id="next_item" value="next_item">
-    <label for="next_item">Advance to the next playlist item.</label><br/>
-    <input type="radio" name="action" id="next_stream" value="next_stream">
-    <label for="next_stream">Switch to the next audio stream.</label><br/>
-    <input type="radio" name="action" id="passthrough" value="passthrough">
-    {% if passthrough_state %}
-    <label for="passthrough">Disable audio passthrough.</label><br/>
-    {% else %}
-    <label for="passthrough">Enable audio passthrough.</label><br/>
-    {% endif %}
-</fieldset>
-<input type="submit" value="Submit" formaction="{% url 'tv:kodi_control' shortname=shortname series=series_name %}">
+<p>
+<button type="submit" name="action" id="load_all" value="load_all">Sync episode list with disk (no changes to watched marks)</button><br/>
+<button type="submit" name="action" id="mark_unwatched" value="mark_unwatched">Mark all episodes unwatched</button><br/>
+<button type="submit" name="action" id="mark_watched" value="mark_watched">Mark all episodes watched</button><br/>
+<button type="submit" name="action" id="delete_series" value="delete_series">Delete series from database (does not touch disk)</button>
+</p>
 </form>
+</div>
+<button class="collapsible">Kodi Control</button>
+<div class="hidable">
+<form method="post" action="{% url 'tv:kodi_control' shortname=shortname series=series_name %}">
+{% csrf_token %}
+<p>
+<button type="radio" name="action" id="subs_off" value="subs_off">Turn off subtitles</button><br/>
+<button type="radio" name="action" id="subs_on" value="subs_on">Turn on subtitles</button><br/>
+<button type="radio" name="action" id="next_item" value="next_item">Advance to the next playlist item</button><br/>
+<button type="radio" name="action" id="next_stream" value="next_stream">Switch to the next audio stream</button><br/>
+<button type="radio" name="action" id="passthrough" value="passthrough">
+{% if passthrough_state %}
+Disable audio passthrough
+{% else %}
+Enable audio passthrough
+{% endif %}
+</button>
+</p>
+</form>
+</div>
+</div>
 {% include "./footer.html" %}
