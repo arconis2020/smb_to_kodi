@@ -161,7 +161,7 @@ class SeriesModelTests(TestCase):
         self.assertEqual(Episode.objects.filter(series=self.testser).count(), 0)
         with self.assertLogs("django", level="INFO") as lm1:
             call_command("syncdisk")
-        self.assertEqual(lm1.output, [f"INFO:django:Updating {self.testser.series_name} from disk."])
+        self.assertIn(f"INFO:django:Updating {self.testser.series_name} from disk.", lm1.output)
         self.assertEqual(Episode.objects.filter(series=self.testser).count(), 10)
 
 
@@ -205,6 +205,13 @@ class EpisodeModelTests(TestCase):
 class TvIndexViewTests(TestCase):
     """Tests for the main Index view at /tv/."""
 
+    @classmethod
+    def setUpClass(cls):
+        """Create a temporary directory structure with known contents for testing."""
+        super(TvIndexViewTests, cls).setUpClass()
+        cls.dfac = DirectoryFactory()
+        cls.dfac.create_library()
+
     def test_section_presence(self):
         """Confirm the presence of the three main sections of the index page."""
         response = self.client.get(reverse("tv:index"))
@@ -225,12 +232,17 @@ class TvIndexViewTests(TestCase):
         """Confirm that we can submit and then immediately see a library."""
         post_response = self.client.post(
             reverse("tv:add_library"),
-            {"path": "/mnt/video/Series", "prefix": "/mnt", "servername": "samba.local", "shortname": "video"},
+            {
+                "path": self.dfac.libdir.name,
+                "prefix": tempfile.gettempdir(),
+                "servername": "samba.local",
+                "shortname": "video",
+            },
         )
         self.assertIn(post_response.status_code, [200, 302])
         get_response = self.client.get(reverse("tv:index"))
         self.assertIn(get_response.status_code, [200, 302])
-        self.assertContains(get_response, "/mnt/video/Series")
+        self.assertContains(get_response, self.dfac.libdir.name)
 
 
 class TvSeriesViewTests(TestCase):

@@ -27,6 +27,11 @@ class Library(models.Model):
     servername = models.CharField(max_length=255)
     shortname = models.CharField(max_length=255, unique=True, default="video")
 
+    def save(self, *args, **kwargs):
+        """Override save to automatically add all series when creating a new library, because it's quick."""
+        super().save(*args, **kwargs)
+        self.add_all_series()
+
     def __str__(self):
         """Return an easy string representation."""
         return self.path

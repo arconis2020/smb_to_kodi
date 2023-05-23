@@ -52,6 +52,9 @@ class SeriesView(generic.ListView):
 def series_detail(request, shortname, series):
     """View the episode control page for a single series."""
     this_series = Episode.objects.filter(series=series).order_by("smb_path")
+    # Enable an automatic "lazy" load on first access.
+    if this_series.count() == 0:
+        Series.objects.get(pk=series).add_all_episodes()
     unwatched = this_series.filter(watched=False).order_by("smb_path")
     next_episode = unwatched[0] if bool(unwatched) else "No episodes loaded"
     random_episode = choice(unwatched) if bool(unwatched) else "No episodes loaded"
