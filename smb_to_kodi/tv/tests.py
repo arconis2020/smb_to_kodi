@@ -11,6 +11,12 @@ from django.urls import reverse
 from requests.exceptions import ConnectionError
 
 
+from .admin import (
+    mark_episode_set_as_watched,
+    mark_episode_set_as_unwatched,
+    mark_series_as_watched,
+    mark_series_as_unwatched,
+)
 from .models import Player, Library, Series, Episode
 from .kodi import Kodi
 
@@ -601,3 +607,68 @@ class KodiTests(TestCase):
         mock_post.reset_mock(return_value=True, side_effect=True)
         mock_post.side_effect = ConnectionError("Not Connected.")
         self.assertFalse(self.kodi.get_audio_passthrough())
+
+
+class AdminFunctionTests(TestCase):
+    """Test the functions found in the admin page/admin.py module."""
+
+    @classmethod
+    def setUpClass(cls):
+        """Create a temporary directory structure with known contents for testing."""
+        super(AdminFunctionTests, cls).setUpClass()
+        cls.episode_cnt = 3
+        cls.dfac = DirectoryFactory()
+        cls.dfac.create_library()
+        cls.dfac.create_series(1)
+        cls.dfac.create_episodes(cls.episode_cnt, False)
+        cls.testlib = Library(
+            path=cls.dfac.libdir.name, prefix=tempfile.gettempdir(), servername="localhost", shortname="testlib6"
+        )
+        cls.testlib.save()
+        cls.testser = Series(series_name=os.path.basename(cls.dfac.series[0].name), library=cls.testlib)
+        cls.testser.save()
+        cls.testser.add_all_episodes()
+
+    def test_mark_episode_set_as_watched(self):
+        """Ensure that the episodes are unwatched, then make sure the function marks them watched."""
+        # Assure all episodes are unwatched.
+        Episode.objects.filter(series=self.testser).update(watched=False)
+        # Obtain a queryset to feed to the function.
+        qs = Episode.objects.filter(series=self.testser)
+        # Run the function.
+        mark_episode_set_as_watched(None, None, qs)
+        # Confirm all episodes are watched.
+        self.assertEqual(Episode.objects.filter(series=self.testser, watched=True).count(), self.episode_cnt)
+
+    def test_mark_episode_set_as_unwatched(self):
+        """Ensure that the episodes are watched, then make sure the function marks them unwatched."""
+        # Assure all episodes are watched.
+        Episode.objects.filter(series=self.testser).update(watched=True)
+        # Obtain a queryset to feed to the function.
+        qs = Episode.objects.filter(series=self.testser)
+        # Run the function.
+        mark_episode_set_as_unwatched(None, None, qs)
+        # Confirm all episodes are unwatched.
+        self.assertEqual(Episode.objects.filter(series=self.testser, watched=False).count(), self.episode_cnt)
+
+    def test_mark_series_as_watched(self):
+        """Ensure that the episodes are unwatched, then make sure the function marks them watched."""
+        # Assure all episodes are unwatched.
+        Episode.objects.filter(series=self.testser).update(watched=False)
+        # Obtain a queryset to feed to the function.
+        qs = Series.objects.filter(series_name=self.testser.series_name)
+        # Run the function.
+        mark_series_as_watched(None, None, qs)
+        # Confirm all episodes are watched.
+        self.assertEqual(Episode.objects.filter(series=self.testser, watched=True).count(), self.episode_cnt)
+
+    def test_mark_series_as_unwatched(self):
+        """Ensure that the episodes are watched, then make sure the function marks them unwatched."""
+        # Assure all episodes are watched.
+        Episode.objects.filter(series=self.testser).update(watched=True)
+        # Obtain a queryset to feed to the function.
+        qs = Series.objects.filter(series_name=self.testser.series_name)
+        # Run the function.
+        mark_series_as_unwatched(None, None, qs)
+        # Confirm all episodes are watched.
+        self.assertEqual(Episode.objects.filter(series=self.testser, watched=False).count(), self.episode_cnt)

@@ -3,6 +3,7 @@ from os.path import basename, join, relpath
 from pathlib import Path
 import mimetypes
 import unicodedata
+from django.contrib import admin
 from django.db import models
 from django.db.models import Count
 
@@ -72,6 +73,7 @@ class Series(models.Model):
         """Control the naming in the admin site."""
 
         verbose_name_plural = "series"
+        ordering = ["series_name"]
 
     series_name = models.CharField(max_length=80, primary_key=True)
     library = models.ForeignKey(Library, on_delete=models.CASCADE)
@@ -109,6 +111,11 @@ class Series(models.Model):
 class Episode(models.Model):
     """A representation of a single episode of a series."""
 
+    class Meta:
+        """Control the ordering in the admin site."""
+
+        ordering = ["smb_path"]
+
     series = models.ForeignKey(Series, on_delete=models.CASCADE)
     smb_path = models.CharField(max_length=200, primary_key=True)
     watched = models.BooleanField(default=False)
@@ -121,6 +128,7 @@ class Episode(models.Model):
         """Enable easy sorting using database functions like order_by."""
         return self.smb_path < other.smb_path
 
+    @admin.display(ordering="smb_path")
     def basename(self):
         """Return a shortname for the episode for easy display purposes."""
         my_basename = basename(self.smb_path)
