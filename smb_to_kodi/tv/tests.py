@@ -248,7 +248,7 @@ class TvIndexViewTests(TestCase):
         self.assertIn(post_response.status_code, [200, 302])
         get_response = self.client.get(reverse("tv:index"))
         self.assertIn(get_response.status_code, [200, 302])
-        self.assertContains(get_response, self.dfac.libdir.name)
+        self.assertContains(get_response, "video")
 
 
 class TvSeriesViewTests(TestCase):
@@ -606,6 +606,11 @@ class KodiTests(TestCase):
         # Step 3: Test that we get False when there is no connection.
         mock_post.reset_mock(return_value=True, side_effect=True)
         mock_post.side_effect = ConnectionError("Not Connected.")
+        self.assertFalse(self.kodi.get_audio_passthrough())
+        # Step 4: Test that we get False when Kodi returns NO result (passthrough is N/A).
+        mock_post.reset_mock(return_value=True, side_effect=True)
+        mock_post.return_value.status_code = 200
+        mock_post.return_value.json.return_value = {"id": "1", "jsonrpc": "2.0"}
         self.assertFalse(self.kodi.get_audio_passthrough())
 
 
