@@ -1,0 +1,82 @@
+.flex-container {
+    display: flex;
+    flex-wrap: wrap;
+    flex-direction: column;
+    align-content: space-between;
+}
+
+.flex-container > div {
+    text-align: left;
+    border: 3px outset lightblue;
+}
+
+body {
+    background-color: #dddddd;
+    color: #373737;
+}
+
+@media (max-width: 35rem) {
+    .conditional-break {
+        display: inline;
+    }
+}
+
+@media (min-width: 36rem) {
+    .conditional-break {
+        display: none;
+    }
+}
+
+.dark-mode {
+    background-color: #373737;
+    color: #dddddd;
+}
+
+.link {
+    color: #3092F5;
+    font-size: 18pt;
+}
+
+.collapsible {
+    background-color: #777;
+    color: white;
+    cursor: pointer;
+    padding: 18px;
+    border: none;
+    text-align: left;
+    outline: none;
+    font-size: 20pt;
+    min-width: 300px;
+}
+
+.default-open {
+    @extend .collapsible
+}
+
+.active, .collapsible:hover {
+    background-color: #555;
+}
+
+.collapsible:after {
+    content: '\002B';
+    color: white;
+    font-weight: bold;
+    float: right;
+    margin-left: 30px;
+}
+
+.active:after {
+    content: "\2212";
+}
+
+.hidable {
+    padding: 0 18px;
+    max-height: 0;
+    overflow: hidden;
+    transition: max-height 0.2s ease-out;
+    font-size: 18pt;
+}
+
+select {
+    max-width: 280px;
+}
