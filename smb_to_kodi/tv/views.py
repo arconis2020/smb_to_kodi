@@ -1,12 +1,71 @@
 """Class-based and function-based view backings for the URLs in the tv app."""
 from random import choice
+from pathlib import Path
+from lxml import etree, html
 from django.http import HttpResponseRedirect, Http404
 from django.shortcuts import render
 from django.urls import reverse
 from django.views import generic
+from django.utils import timezone
 
-from .models import Player, Library, Series, Episode
+from .models import Player, Library, Series, Episode, Movie
 from .kodi import Kodi
+
+
+class NestedDocument:
+    """A representation of a nested set of elements in a document."""
+
+    def __init__(self, shared_root):
+        """Set up the basic dictionary to keep track of elements."""
+        self.divs = {}  # Elements are added to folders using a key.
+        self.shared_root = Path(shared_root)
+
+    def add_media_file(self, smb_path, last_watched=None):
+        """Add a media file with a smb_path attribute to the correct set of folders."""
+        # We'll need the path to be able to get things like file names and parents.
+        path = Path(smb_path)
+        # Add a button element that will be used with javascript to play this file.
+        playbutton = html.HtmlElement("\u25b6")
+        playbutton.set("value", smb_path)
+        playbutton.set("class", "jsplay")
+        playbutton.set("style", "margin: 12px;")
+        playbutton.tag = "button"
+        # Add the p element, with the button element as a nested element.
+        para = etree.Element("p", {"style": "margin: 0;"})
+        para.append(playbutton)
+        # Add a text span to allow for easier placement:
+        txt = etree.Element("span")
+        txt.text = path.name
+        para.append(txt)
+        # Add a last-watched date span to allow for easier placement:
+        if bool(last_watched):
+            lwe = etree.Element("span", {"style": "color: #3092F5;"})
+            lwe.text = f"{last_watched:%Y-%m-%d}"
+            para.append(lwe)
+        # Add the folder to the divs dict with an appropriate div value.
+        folder = path.parent
+        res = self.divs.setdefault(str(folder), etree.Element("div", {"class": "hidable"}))
+        # Append the p element to the div/folder where it should live.
+        res.append(para)
+        # Recurse up through the parents, creating a set of stacked divs.
+        while folder != self.shared_root:
+            parent = folder.parent
+            res = self.divs.setdefault(str(parent), etree.Element("div", {"class": "hidable"}))
+            res.append(self.divs[str(folder)])
+            folder = parent
+
+    def sort_and_add_buttons(self):
+        """Sort the document in place and then add the collapsible buttons."""
+        # Sort the element tree with divs first, then p's, at each level.
+        for parent in self.divs[str(self.shared_root)].xpath("//*[./*]"):
+            parent[:] = sorted(parent, key=lambda x: x.tag)
+        # Use the fact that we can address each folder to add a collapsible button to each folder.
+        for key, element in self.divs.items():
+            if key == str(self.shared_root):
+                continue
+            button = etree.Element("button", {"class": "collapsible"})
+            button.text = Path(key).name
+            element.addprevious(button)
 
 
 class IndexView(generic.ListView):
@@ -18,6 +77,7 @@ class IndexView(generic.ListView):
         """Add page context items for better rendering."""
         context = super().get_context_data(**kwargs)
         context["current_player"] = Player.objects.get(pk=1).address if Player.objects.count() == 1 else ""
+        context["content_types"] = Library.ContentType.choices
         return context
 
     def get_queryset(self):
@@ -73,16 +133,39 @@ def series_detail(request, shortname, series):
     )
 
 
-def play(request, shortname, series):
+def movie_view(request, shortname):
+    """View the movie list page with custom collapsibles."""
+    this_library = Library.objects.get(shortname=shortname)
+    this_movie_list = this_library.movie_set.all().order_by("smb_path")
+    # All of these movies have a single shared root folder at the library level.
+    shared_root = str(Path(this_library.get_smb_path(this_library.path)))
+    doc = NestedDocument(shared_root)
+    for movie in this_movie_list:
+        doc.add_media_file(movie.smb_path, movie.last_watched)
+    doc.sort_and_add_buttons()
+    # Rendering the content this way allows proper sorting, as opposed to using the templates.
+    rendered_content = etree.tostring(doc.divs[shared_root], encoding="unicode", pretty_print=True)
+    return render(request, "tv/movie_list.html", {"rendered_content": rendered_content, "library": this_library})
+
+
+def play(request, shortname=None, series=None):
     """Play the given file in Kodi (POST target)."""
     mypath = request.POST["smb_path"]
     k = Kodi()
     k.add_and_play(mypath)
     if k.confirm_successful_play(mypath):
-        this_episode = Episode.objects.get(pk=mypath)
-        this_episode.watched = True
-        this_episode.save()
-    return HttpResponseRedirect(reverse("tv:episodes", args=(shortname, series)))
+        # We want to mark either the episode or the movie as played.
+        try:
+            this_episode = Episode.objects.get(pk=mypath)
+            this_episode.watched = True
+            this_episode.save()
+        except Episode.DoesNotExist:  # pragma: no cover
+            this_movie = Movie.objects.get(pk=mypath)
+            this_movie.last_watched = timezone.now()
+            this_movie.save()
+    if all([bool(shortname), bool(series)]):
+        return HttpResponseRedirect(reverse("tv:episodes", args=(shortname, series)))
+    return HttpResponseRedirect(request.META["HTTP_REFERER"])  # pragma: no cover - safe fallback only.
 
 
 def mark_as_watched(request, shortname, series):
@@ -109,7 +192,7 @@ def manage_all_episodes(request, shortname, series):
         this_series.episode_set.all().update(watched=True)
     elif this_action == "delete_series":
         this_series.delete()
-        return HttpResponseRedirect(reverse("tv:library", args=(shortname,)))
+        return HttpResponseRedirect(reverse("tv:series_library", args=(shortname,)))
     return HttpResponseRedirect(reverse("tv:episodes", args=(shortname, series)))
 
 
@@ -148,7 +231,14 @@ def add_library(request):
     this_prefix = request.POST["prefix"]
     this_servername = request.POST["servername"]
     this_shortname = request.POST["shortname"]
-    this_library = Library(path=this_path, prefix=this_prefix, servername=this_servername, shortname=this_shortname)
+    this_content_type = request.POST["content_type"]
+    this_library = Library(
+        path=this_path,
+        prefix=this_prefix,
+        servername=this_servername,
+        shortname=this_shortname,
+        content_type=this_content_type,
+    )
     this_library.save()
     return HttpResponseRedirect(reverse("tv:index"))
 
@@ -160,12 +250,12 @@ def add_series(request, shortname):
     try:
         this_library = Library.objects.get(shortname=this_library)
     except Library.DoesNotExist:  # pragma: no cover
-        return HttpResponseRedirect(reverse("tv:library", args=(shortname,)))
+        return HttpResponseRedirect(reverse("tv:series_library", args=(shortname,)))
     if this_series_name == "all":
         this_library.add_all_series()
     else:
         this_library.series_set.update_or_create(series_name=this_series_name)
-    return HttpResponseRedirect(reverse("tv:library", args=(shortname,)))
+    return HttpResponseRedirect(reverse("tv:series_library", args=(shortname,)))
 
 
 def delete_library(request):

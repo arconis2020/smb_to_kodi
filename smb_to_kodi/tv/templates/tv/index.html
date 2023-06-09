@@ -5,7 +5,11 @@
         {% if library_list %}
             <ul>
             {% for library in library_list %}
-               <li><a class="link" href="{% url 'tv:library' library.shortname %}">{{ library.shortname }}</a></li>
+                {% if library.content_type == library.ContentType.SERIES %}
+                    <li><a class="link" href="{% url 'tv:series_library' library.shortname %}">{{ library.shortname }}</a></li>
+                {% elif library.content_type == library.ContentType.MOVIES %}
+                    <li><a class="link" href="{% url 'tv:movie_library' library.shortname %}">{{ library.shortname }}</a></li>
+                {% endif %}
             {% endfor %}
             </ul>
         {% else %}
@@ -36,6 +40,12 @@
             <input type="text" name="servername" id="servername" maxlength="255"><br/>
             <label for="shortname">Shortname:</label>
             <input type="text" name="shortname" id="shortname" maxlength="255">
+            <p><label for="content_type">Content Type:</label>
+            <select name="content_type" id="content_type">
+                {% for ct_int, ct_name in content_types %}
+                    <option value="{{ ct_int }}">{{ ct_name }}</option>
+                {% endfor %}
+            </select></p>
         </fieldset>
         <input type="submit" value="Submit" formaction="{% url 'tv:add_library' %}">
         </form>

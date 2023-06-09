@@ -23,15 +23,27 @@ class Library(models.Model):
 
         verbose_name_plural = "libraries"
 
+    class ContentType(models.IntegerChoices):
+        """Set simple constants for the types of media we support."""
+
+        SERIES = 0
+        MOVIES = 1
+        MUSIC = 2
+
     path = models.CharField(max_length=255, primary_key=True)
     prefix = models.CharField(max_length=255)
     servername = models.CharField(max_length=255)
     shortname = models.CharField(max_length=255, unique=True, default="video")
+    content_type = models.IntegerField(choices=ContentType.choices, default=ContentType.SERIES)
 
     def save(self, *args, **kwargs):
         """Override save to automatically add all series when creating a new library, because it's quick."""
         super().save(*args, **kwargs)
-        self.add_all_series()
+        ctype = int(self.content_type)  # This comes through the form as a string and is coerced elsewhere.
+        if ctype == self.ContentType.SERIES:
+            self.add_all_series()
+        elif ctype == self.ContentType.MOVIES:
+            self.add_all_movies()
 
     def __str__(self):
         """Return an easy string representation."""
@@ -43,6 +55,26 @@ class Library(models.Model):
         # Normalize unicode filenames
         rel_path = unicodedata.normalize("NFC", rel_path)
         return join("smb://", self.servername, rel_path)
+
+    def add_all_movies(self):
+        """Find all video files in this folder structrue, and add them as movies for this library."""
+        # First, find all of the episodes.
+        found = []
+        for path in Path(self.path).rglob("*"):
+            if "@eaDir" in str(path):  # pragma: no cover
+                continue
+            filetype = mimetypes.guess_type(path)[0]
+            if filetype is None:
+                continue
+            if filetype.startswith("video/"):
+                found.append(str(path))
+        # Now remove anything that wasn't found on disk.
+        found = [self.get_smb_path(x) for x in found]
+        self.movie_set.exclude(smb_path__in=found).delete()
+        # Now add anything that is new on disk.
+        to_add = set(found) - set(self.movie_set.values_list("smb_path", flat=True))
+        to_add = [Movie(library=self, smb_path=x) for x in to_add]
+        self.movie_set.bulk_create(to_add)
 
     def add_all_series(self):
         """Find all subdirectories in this library, and treat them as Series objects, loading them in."""
@@ -108,17 +140,16 @@ class Series(models.Model):
         self.episode_set.bulk_create(to_add)
 
 
-class Episode(models.Model):
-    """A representation of a single episode of a series."""
+class SMBFile(models.Model):
+    """A base class to provide simple attributes and interfaces needed by all media file types."""
+
+    smb_path = models.CharField(max_length=200, primary_key=True)
 
     class Meta:
         """Control the ordering in the admin site."""
 
+        abstract = True
         ordering = ["smb_path"]
-
-    series = models.ForeignKey(Series, on_delete=models.CASCADE)
-    smb_path = models.CharField(max_length=200, primary_key=True)
-    watched = models.BooleanField(default=False)
 
     def __str__(self):
         """Return an easy string representation."""
@@ -133,3 +164,17 @@ class Episode(models.Model):
         """Return a shortname for the episode for easy display purposes."""
         my_basename = basename(self.smb_path)
         return f"{my_basename}"
+
+
+class Episode(SMBFile):
+    """A representation of a single episode of a series."""
+
+    series = models.ForeignKey(Series, on_delete=models.CASCADE)
+    watched = models.BooleanField(default=False)
+
+
+class Movie(SMBFile):
+    """A representation of a single Movie."""
+
+    library = models.ForeignKey(Library, on_delete=models.CASCADE)
+    last_watched = models.DateTimeField("Date last watched", blank=True, null=True)

@@ -8,6 +8,7 @@ import pydocstyle
 from django.core.management import call_command
 from django.test import TestCase
 from django.urls import reverse
+from django.utils import timezone
 from requests.exceptions import ConnectionError
 
 
@@ -17,7 +18,7 @@ from .admin import (
     mark_series_as_watched,
     mark_series_as_unwatched,
 )
-from .models import Player, Library, Series, Episode
+from .models import Player, Library, Series, Episode, Movie
 from .kodi import Kodi
 
 
@@ -171,6 +172,52 @@ class SeriesModelTests(TestCase):
         self.assertEqual(Episode.objects.filter(series=self.testser).count(), 10)
 
 
+class MovieModelTests(TestCase):
+    """Tests for the Movie database model."""
+
+    @classmethod
+    def setUpClass(cls):
+        """Create a temporary directory structure with known contents for testing."""
+        super(MovieModelTests, cls).setUpClass()
+        cls.dfac = DirectoryFactory()
+        cls.dfac.create_library()
+        cls.dfac.create_series(10)
+        cls.dfac.create_episodes(10, True)
+        # This will automatically add media files based on the save action.
+        cls.testlib = Library(
+            path=cls.dfac.libdir.name,
+            prefix=tempfile.gettempdir(),
+            servername="localhost",
+            shortname="testmovielib1",
+            content_type=Library.ContentType.MOVIES,
+        )
+        cls.testlib.save()
+        # Grab one Movie for testing.
+        cls.testmov = cls.testlib.movie_set.order_by("smb_path").first()
+        cls.first_movie_name = sorted([x.name for x in cls.dfac.episodes])[0]
+
+    def test_string_rep(self):
+        """Confirm string representation of Movies."""
+        self.assertEqual(str(self.testmov), self.testlib.get_smb_path(self.first_movie_name))
+
+    def test_add_all_movies(self):
+        """Confirm that all files are added as expected to the library."""
+        # Test adding all movies from the model. Already done, do it again.
+        self.testlib.add_all_movies()
+        self.assertEqual(Movie.objects.filter(library=self.testlib).count(), 10)
+        # Test adding all movies from the command line.
+        self.testlib.movie_set.all().delete()
+        self.assertEqual(Movie.objects.filter(library=self.testlib).count(), 0)
+        with self.assertLogs("django", level="INFO") as lm1:
+            call_command("syncdisk")
+        self.assertIn(f"INFO:django:Updating movie library {self.testlib.shortname} from disk.", lm1.output)
+        self.assertEqual(Movie.objects.filter(library=self.testlib).count(), 10)
+
+    def test_basename(self):
+        """Confirm basename functionality."""
+        self.assertEqual(self.testmov.basename(), os.path.basename(self.first_movie_name))
+
+
 class EpisodeModelTests(TestCase):
     """Tests for the Episode database model."""
 
@@ -243,6 +290,7 @@ class TvIndexViewTests(TestCase):
                 "prefix": tempfile.gettempdir(),
                 "servername": "samba.local",
                 "shortname": "video",
+                "content_type": Library.ContentType.SERIES,
             },
         )
         self.assertIn(post_response.status_code, [200, 302])
@@ -270,7 +318,7 @@ class TvSeriesViewTests(TestCase):
         """Confirm the presence of the four main sections of the series page, and confirm form outputs."""
         # This has to be one test because things MUST run in order.
         # Step 1: Check the page structure.
-        response = self.client.get(reverse("tv:library", args=("testlib4",)))
+        response = self.client.get(reverse("tv:series_library", args=("testlib4",)))
         self.assertIn(response.status_code, [200, 302])
         self.assertContains(response, "Active Series List")
         self.assertContains(response, "New Series List")
@@ -283,7 +331,7 @@ class TvSeriesViewTests(TestCase):
             reverse("tv:add_series", args=("testlib4",)), {"series_name": test_series_name, "library": "testlib4"}
         )
         self.assertIn(response.status_code, [200, 302])
-        response = self.client.get(reverse("tv:library", args=("testlib4",)))
+        response = self.client.get(reverse("tv:series_library", args=("testlib4",)))
         self.assertContains(response, test_series_name)
         # Step 3: Test the add all feature.
         response = self.client.post(
@@ -297,7 +345,7 @@ class TvSeriesViewTests(TestCase):
         response = self.client.get(reverse("tv:index"))
         self.assertIn(response.status_code, [200, 302])
         self.assertContains(response, "No libraries are available.")
-        response = self.client.get(reverse("tv:library", args=("testlib4",)))
+        response = self.client.get(reverse("tv:series_library", args=("testlib4",)))
         self.assertEqual(response.status_code, 404)
 
 
@@ -373,7 +421,7 @@ class TvSeriesDetailViewTests(TestCase):
         self.check_for_content(f'name="smb_path" id="next" value="{first_ep_smb_path}"')
         # Step 6a: Mark the first episode as watched.
         response = self.client.post(
-            reverse("tv:watched", args=("testlib5", self.testser.series_name)),
+            reverse("tv:watched_episode", args=("testlib5", self.testser.series_name)),
             {"smb_path": first_ep_smb_path},
         )
         self.assertIn(response.status_code, [200, 302])
@@ -390,7 +438,7 @@ class TvSeriesDetailViewTests(TestCase):
         Episode.objects.filter(smb_path__in=[second_ep_smb_path, last_ep_smb_path]).update(watched=False)
         mock_kodi.confirm_successful_play.return_value = True
         response = self.client.post(
-            reverse("tv:play", args=("testlib5", self.testser.series_name)),
+            reverse("tv:play_episode", args=("testlib5", self.testser.series_name)),
             {"smb_path": second_ep_smb_path},
         )
         # Confirm that Kodi is being called.
@@ -426,6 +474,49 @@ class TvSeriesDetailViewTests(TestCase):
         )
         self.assertIn(response.status_code, [200, 302])
         self.assertEqual(Series.objects.filter(series_name=self.testser.series_name).count(), 0)
+
+
+class MovieViewTests(TestCase):
+    """Tests for the Movie view."""
+
+    @classmethod
+    def setUpClass(cls):
+        """Create a temporary directory structure with known contents for testing."""
+        super(MovieViewTests, cls).setUpClass()
+        cls.dfac = DirectoryFactory()
+        cls.dfac.create_library()
+        cls.dfac.create_series(1)
+        cls.dfac.create_episodes(3, False)
+        cls.testlib = Library(
+            path=cls.dfac.libdir.name,
+            prefix=tempfile.gettempdir(),
+            servername="localhost",
+            shortname="testmovielib2",
+            content_type=Library.ContentType.MOVIES,
+        )
+        cls.testlib.save()
+        cls.folder_names = [os.path.basename(x.name) for x in cls.dfac.series]
+
+    def check_for_content(self, expected_content):
+        """Check the movie page repeatedly for content."""
+        response = self.client.get(reverse("tv:movie_library", args=("testmovielib2",)))
+        self.assertIn(response.status_code, [200, 302])
+        self.assertContains(response, expected_content)
+
+    def test_full_page_behavior(self):
+        """Exercise all parts of the Movie page."""
+        # Must be a single test to avoid race conditions with data.
+        # Step 1: Check for the main movie section.
+        e_c = f'<button class="collapsible default-open">{self.testlib.shortname}</button>'
+        self.check_for_content(e_c)
+        # Step 2: Check for the subfolder button.
+        for folder in self.folder_names:
+            e_c = f'<button class="collapsible">{folder}</button>'
+            self.check_for_content(e_c)
+        # Step 3: Mark movies as watched, and confirm that the date shows up.
+        Movie.objects.all().update(last_watched=timezone.now())
+        e_c = f"{timezone.now():%Y-%m-%d}"
+        self.check_for_content(e_c)
 
 
 @patch("tv.kodi.requests.post")

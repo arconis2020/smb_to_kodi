@@ -1,0 +1,21 @@
+{% include "./header.html" %}
+<a class="link" href="{% url 'tv:index' %}">Back to Library List</a>
+{% csrf_token %}
+<div class="flex-container">
+    <button class="collapsible default-open">{{ library.shortname }}</button>
+    {% autoescape off %}
+    {{ rendered_content }}
+    {% endautoescape %}
+    <button class="collapsible">Delete Library</button>
+    <div class="hidable">
+        <form method="post">
+        {% csrf_token %}
+        <fieldset>
+            <label for="library">{{ library.shortname }}</label>
+            <input type="hidden" name="library" id="library" value="{{ library.shortname }}"><br/>
+        </fieldset>
+        <input type="submit" value="Submit" formaction="{% url 'tv:delete_library' %}">
+        </form>
+    </div>
+</div>
+{% include "./footer.html" %}
