@@ -538,17 +538,35 @@ class KodiTests(TestCase):
         cls.foo_playing = {
             "id": "1",
             "jsonrpc": "2.0",
-            "result": {"item": {"file": "foo", "label": "foo", "type": "unknown"}},
+            "result": {"item": {"file": "foo.mp4", "label": "foo.mp4", "type": "unknown"}},
         }
         cls.foo_in_playlist = {
             "id": "1",
             "jsonrpc": "2.0",
             "result": {
-                "items": [{"file": "foo", "label": "foo", "type": "unknown"}],
+                "items": [{"file": "foo.mp4", "label": "foo.mp4", "type": "unknown"}],
                 "limits": {"end": 1, "start": 0, "total": 1},
             },
         }
         cls.generic_ok = {"id": "1", "jsonrpc": "2.0", "result": "OK"}
+        cls.active_player_response = {
+            "id": 1,
+            "jsonrpc": "2.0",
+            "result": [{"playerid": 1, "playertype": "internal", "type": "video"}],
+        }
+
+    def test_select_ids(self, mock_post):  # pylint: disable=W0613
+        """Test the _select_ids function."""
+        vid = "foo.mp4"
+        aud = "foo.mp3"
+        self.assertEqual(self.kodi._select_ids(vid), (1, 1))  # pylint: disable=W0212
+        self.assertEqual(self.kodi._select_ids(aud), (0, 0))  # pylint: disable=W0212
+
+    def test_get_active_players(self, mock_post):
+        """Test the get_active_players function with mock data."""
+        mock_post.return_value.status_code = 200
+        mock_post.return_value.json.return_value = self.active_player_response
+        self.assertEqual(self.kodi.get_active_player(), 1)
 
     def test_now_playing(self, mock_post):
         """Test that the now_playing function returns our expected True/False tuples."""
@@ -566,22 +584,23 @@ class KodiTests(TestCase):
         mock_post.reset_mock(return_value=True, side_effect=True)
         mock_post.return_value.status_code = 200
         mock_post.return_value.json.return_value = self.foo_playing
+        self.kodi.get_active_player = lambda: 1
         result = self.kodi.now_playing()
-        self.assertEqual(result, (True, "foo"))
+        self.assertEqual(result, (True, "foo.mp4"))
 
-    @patch("tv.kodi.Kodi.now_playing", return_value=(True, "foo"))
+    @patch("tv.kodi.Kodi.now_playing", return_value=(True, "foo.mp4"))
     def test_confirm_successful_play(self, mock_play, mock_post):  # pylint: disable=W0613
         """Test that the confirm_successful_play function returns True/False based on playlist and connection."""
         # Step 1: Test that we get True when the file is in the playlist.
         mock_post.return_value.status_code = 200
         mock_post.return_value.json.return_value = self.foo_in_playlist
-        self.assertTrue(self.kodi.confirm_successful_play("foo"))
+        self.assertTrue(self.kodi.confirm_successful_play("foo.mp4"))
         # Step 2: Test that we get False when the file is NOT in the playlist.
-        self.assertFalse(self.kodi.confirm_successful_play("bar"))
+        self.assertFalse(self.kodi.confirm_successful_play("bar.mp4"))
         # Step 3: Test that we get False when there is no connection to Kodi.
         mock_post.reset_mock(return_value=True, side_effect=True)
         mock_post.side_effect = ConnectionError("Not Connected.")
-        self.assertFalse(self.kodi.confirm_successful_play("foo"))
+        self.assertFalse(self.kodi.confirm_successful_play("foo.mp4"))
 
     def log_with_connection(self, mock_post, kodi_function, kodi_function_args, exp_log_output):
         """Run a Kodi function and confirm the log output, following DRY."""
@@ -603,31 +622,45 @@ class KodiTests(TestCase):
         """Test that the add_to_playlist function logs as expected."""
         # Step 1: Test that we get the good log entry when connected.
         self.log_with_connection(
-            mock_post, self.kodi.add_to_playlist, ("foo",), ["INFO:django:Added foo to playlist successfully!"]
+            mock_post, self.kodi.add_to_playlist, ("foo.mp4",), ["INFO:django:Added foo.mp4 to playlist successfully!"]
         )
         # Step 2: Test that we get the bad log entry when not connected.
         self.log_without_connection(
             mock_post,
             self.kodi.add_to_playlist,
-            ("foo",),
-            ["ERROR:django:PROBLEM: foo not added to playlist. Try a different way."],
+            ("foo.mp4",),
+            ["ERROR:django:PROBLEM: foo.mp4 not added to playlist. Try a different way."],
         )
 
-    def test_clear_playlist(self, mock_post):
-        """Test that the clear_playlist function logs as expected."""
+    def test_clear_playlists(self, mock_post):
+        """Test that the clear_playlists function logs as expected."""
         # Step 1: Test that we get the good log entry when connected.
-        self.log_with_connection(mock_post, self.kodi.clear_playlist, (), ["INFO:django:Clearing playlist: OK"])
+        self.log_with_connection(
+            mock_post,
+            self.kodi.clear_playlists,
+            (),
+            ["INFO:django:Clearing playlist: OK"] * 2,
+        )
         # Step 2: Test that we get the bad log entry when not connected.
         self.log_without_connection(
-            mock_post, self.kodi.clear_playlist, (), ["INFO:django:Clearing playlist: {'connection': False}"]
+            mock_post, self.kodi.clear_playlists, (), ["INFO:django:Clearing playlist: {'connection': False}"] * 2
         )
 
     def test_play_it(self, mock_post):
         """Test that the play_it function logs as expected."""
-        # Step 1: Test that we get the good log entry when connected.
-        self.log_with_connection(mock_post, self.kodi.play_it, (), ["INFO:django:Playing: OK"])
-        # Step 2: Test that we get the bad log entry when not connected.
-        self.log_without_connection(mock_post, self.kodi.play_it, (), ["INFO:django:Playing: {'connection': False}"])
+        # Step 1: Test that we get the good log entry for video when connected.
+        self.log_with_connection(mock_post, self.kodi.play_it, ("foo.mp4",), ["INFO:django:Playing: OK"])
+        # Step 2: Test that we get the good log entry for audio when connected.
+        self.log_with_connection(
+            mock_post,
+            self.kodi.play_it,
+            ("foo.mp3",),
+            ["INFO:django:Playing: OK", "INFO:django:Showing visualization: OK"],
+        )
+        # Step 3: Test that we get the bad log entry when not connected.
+        self.log_without_connection(
+            mock_post, self.kodi.play_it, ("foo.mp4",), ["INFO:django:Playing: {'connection': False}"]
+        )
 
     def test_next_item(self, mock_post):
         """Test that the next_item function logs as expected."""
