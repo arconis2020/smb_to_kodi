@@ -1,4 +1,5 @@
 """A module to control a Kodi/XMBC media player over the network using JSONRPC."""
+from time import sleep
 import logging
 import mimetypes
 import requests
@@ -37,7 +38,17 @@ class Kodi:
         return (None, None)  # pragma: no cover - safety catch for pylint.
 
     def get_active_player(self):
-        """Get the active audio/video player ID."""
+        """
+        Get the active audio/video player ID.
+
+        THIS FUNCTION IS UNRELIABLE DURING STATE CHANGE.
+
+        This function will always return the list of active players if there is a FULLY active player.
+        In the event that a player is transitioning between inactive and active, such as immediately
+        after a Player.Open event, this function will return None even while Player.GetItem will show
+        that there is an active item. This is a problem internal to the Kodi API, and can't be fixed
+        in this codebase. A workaround for this can be to loop this function, possibly w/a timeout.
+        """
         # 0 for audio, 1 for video, 2 for pictures (not supported)
         specific_params = {"method": "Player.GetActivePlayers"}
         res = self._runit(specific_params)
@@ -148,6 +159,9 @@ class Kodi:
             self.clear_playlists()
             self.add_to_playlist(filename)
             self.play_it(filename)
+            # At this point, we should be playing, so hold until we can prove it.
+            while self.get_active_player() is None:
+                sleep(0.05)
 
     def get_audio_passthrough(self):
         """Fetch the current state of the audio passthrough setting."""
