@@ -9,6 +9,8 @@
                     <li><a class="link" href="{% url 'tv:series_library' library.shortname %}">{{ library.shortname }}</a></li>
                 {% elif library.content_type == library.ContentType.MOVIES %}
                     <li><a class="link" href="{% url 'tv:movie_library' library.shortname %}">{{ library.shortname }}</a></li>
+                {% elif library.content_type == library.ContentType.MUSIC %}
+                    <li><a class="link" href="{% url 'tv:song_library' library.shortname %}">{{ library.shortname }}</a></li>
                 {% endif %}
             {% endfor %}
             </ul>

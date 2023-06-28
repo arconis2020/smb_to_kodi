@@ -1,4 +1,5 @@
 """Class-based and function-based view backings for the URLs in the tv app."""
+from functools import lru_cache
 from random import choice
 from pathlib import Path
 from lxml import etree, html
@@ -18,7 +19,7 @@ class NestedDocument:
     def __init__(self, shared_root):
         """Set up the basic dictionary to keep track of elements."""
         self.divs = {}  # Elements are added to folders using a key.
-        self.shared_root = Path(shared_root)
+        self.shared_root = shared_root
 
     def add_media_file(self, smb_path, last_watched=None):
         """Add a media file with a smb_path attribute to the correct set of folders."""
@@ -44,24 +45,47 @@ class NestedDocument:
             para.append(lwe)
         # Add the folder to the divs dict with an appropriate div value.
         folder = path.parent
-        res = self.divs.setdefault(str(folder), etree.Element("div", {"class": "hidable"}))
+        res = self.divs.setdefault(folder, etree.Element("div", {"class": "hidable"}))
         # Append the p element to the div/folder where it should live.
         res.append(para)
-        # Recurse up through the parents, creating a set of stacked divs.
-        while folder != self.shared_root:
-            parent = folder.parent
-            res = self.divs.setdefault(str(parent), etree.Element("div", {"class": "hidable"}))
-            res.append(self.divs[str(folder)])
-            folder = parent
+
+    @lru_cache(maxsize=4096)
+    def _add_folder_to_parent(self, folder, parent):
+        """
+        Add a folder to a parent, but remember if it's been done.
+
+        As an example of why this is LRU cache is necessary, imagine a folder structure
+        like this:
+        By Artist/A/{many artists starting with A}
+
+        In this scenario, the stack_folders function is going to try to add the "A" folder
+        to the "By Artist" folder as many times as there are songs in the artist folders
+        under "A". Only the first attempt to add "A" to "By Artist" makes any sense, and
+        the rest are ignored by ElementTree anyway (previous implementations show this),
+        so we want to completely skip any action on subsequent adds to speed things up.
+
+        The LRU cache here improves the Music view load time by 2 orders of magnitude
+        on my highly nested music collection.
+        """
+        res = self.divs.setdefault(parent, etree.Element("div", {"class": "hidable"}))
+        res.append(self.divs[folder])
+
+    def stack_folders(self):
+        """Recurse just once through the folder parents, creating a set of stacked divs."""
+        for folder in list(self.divs.keys()):
+            while folder != self.shared_root:
+                parent = folder.parent
+                self._add_folder_to_parent(folder, parent)
+                folder = parent
 
     def sort_and_add_buttons(self):
         """Sort the document in place and then add the collapsible buttons."""
         # Sort the element tree with divs first, then p's, at each level.
-        for parent in self.divs[str(self.shared_root)].xpath("//*[./*]"):
+        for parent in self.divs[self.shared_root].xpath("//*[./*]"):
             parent[:] = sorted(parent, key=lambda x: x.tag)
         # Use the fact that we can address each folder to add a collapsible button to each folder.
         for key, element in self.divs.items():
-            if key == str(self.shared_root):
+            if key == self.shared_root:
                 continue
             button = etree.Element("button", {"class": "collapsible"})
             button.text = Path(key).name
@@ -133,18 +157,33 @@ def series_detail(request, shortname, series):
     )
 
 
+def build_nested_view(library, object_list):
+    """Build a nested view for use in both movie and music views."""
+    # All media files have a single shared root folder at the library level.
+    shared_root = Path(library.get_smb_path(library.path))
+    doc = NestedDocument(shared_root)
+    for obj in object_list:
+        lwn = getattr(obj, "last_watched", None)
+        doc.add_media_file(obj.smb_path, lwn)
+    doc.stack_folders()
+    doc.sort_and_add_buttons()
+    # Rendering the content this way allows proper sorting, as opposed to using the templates.
+    return etree.tostring(doc.divs[shared_root], encoding="unicode", pretty_print=True)
+
+
+def music_view(request, shortname):
+    """View the music list page with custom collapsibles."""
+    this_library = Library.objects.get(shortname=shortname)
+    this_song_list = this_library.song_set.all().order_by("smb_path")
+    rendered_content = build_nested_view(this_library, this_song_list)
+    return render(request, "tv/movie_list.html", {"rendered_content": rendered_content, "library": this_library})
+
+
 def movie_view(request, shortname):
     """View the movie list page with custom collapsibles."""
     this_library = Library.objects.get(shortname=shortname)
     this_movie_list = this_library.movie_set.all().order_by("smb_path")
-    # All of these movies have a single shared root folder at the library level.
-    shared_root = str(Path(this_library.get_smb_path(this_library.path)))
-    doc = NestedDocument(shared_root)
-    for movie in this_movie_list:
-        doc.add_media_file(movie.smb_path, movie.last_watched)
-    doc.sort_and_add_buttons()
-    # Rendering the content this way allows proper sorting, as opposed to using the templates.
-    rendered_content = etree.tostring(doc.divs[shared_root], encoding="unicode", pretty_print=True)
+    rendered_content = build_nested_view(this_library, this_movie_list)
     return render(request, "tv/movie_list.html", {"rendered_content": rendered_content, "library": this_library})
 
 
@@ -160,7 +199,10 @@ def play(request, shortname=None, series=None):
             this_episode.watched = True
             this_episode.save()
         except Episode.DoesNotExist:  # pragma: no cover
-            this_movie = Movie.objects.get(pk=mypath)
+            try:
+                this_movie = Movie.objects.get(pk=mypath)
+            except Movie.DoesNotExist:  # pragma: no cover
+                return HttpResponseRedirect(request.META["HTTP_REFERER"])  # pragma: no cover - safe fallback only.
             this_movie.last_watched = timezone.now()
             this_movie.save()
     if all([bool(shortname), bool(series)]):

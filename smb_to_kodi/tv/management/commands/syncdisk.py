@@ -16,3 +16,6 @@ class Command(BaseCommand):
         for movie_lib in Library.objects.filter(content_type=Library.ContentType.MOVIES):
             logger.info(f"Updating movie library {movie_lib.shortname} from disk.")
             movie_lib.add_all_movies()
+        for music_lib in Library.objects.filter(content_type=Library.ContentType.MUSIC):
+            logger.info(f"Updating music library {music_lib.shortname} from disk.")
+            music_lib.add_all_songs()

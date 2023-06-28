@@ -18,7 +18,7 @@ from .admin import (
     mark_series_as_watched,
     mark_series_as_unwatched,
 )
-from .models import Player, Library, Series, Episode, Movie
+from .models import Player, Library, Series, Episode, Movie, Song
 from .kodi import Kodi
 
 
@@ -41,14 +41,14 @@ class DirectoryFactory:  # pylint: disable=R1732
             this_td = tempfile.TemporaryDirectory(dir=self.libdir.name)
             self.series.append(this_td)
 
-    def create_episodes(self, num, dummy):
+    def create_episodes(self, num, dummy, suffix=".mkv"):
         """Create a number of basically named episodes in the first available series."""
         # Make sure that each episode has a numbered prefix in order of adding for sorting.
         # Start at 11 to support more than 10 episodes in sort order.
         prefixer = 11
         for _ in range(num):
             # Should be seen by mimetypes as video
-            this_f = tempfile.NamedTemporaryFile(dir=self.series[0].name, suffix=".mkv", prefix=str(prefixer))
+            this_f = tempfile.NamedTemporaryFile(dir=self.series[0].name, suffix=suffix, prefix=str(prefixer))
             self.episodes.append(this_f)
             if dummy:  # Test that mimetype filtering works
                 # Should be seen by mimetypes as None
@@ -170,6 +170,52 @@ class SeriesModelTests(TestCase):
             call_command("syncdisk")
         self.assertIn(f"INFO:django:Updating {self.testser.series_name} from disk.", lm1.output)
         self.assertEqual(Episode.objects.filter(series=self.testser).count(), 10)
+
+
+class SongModelTests(TestCase):
+    """Tests for the Song database model."""
+
+    @classmethod
+    def setUpClass(cls):
+        """Create a temporary directory structure with known contents for testing."""
+        super(SongModelTests, cls).setUpClass()
+        cls.dfac = DirectoryFactory()
+        cls.dfac.create_library()
+        cls.dfac.create_series(10)
+        cls.dfac.create_episodes(10, True, ".mp3")
+        # This will automatically add media files based on the save action.
+        cls.testlib = Library(
+            path=cls.dfac.libdir.name,
+            prefix=tempfile.gettempdir(),
+            servername="localhost",
+            shortname="testmusiclib1",
+            content_type=Library.ContentType.MUSIC,
+        )
+        cls.testlib.save()
+        # Grab one Song for testing.
+        cls.testsong = cls.testlib.song_set.order_by("smb_path").first()
+        cls.first_song_name = sorted([x.name for x in cls.dfac.episodes])[0]
+
+    def test_string_rep(self):
+        """Confirm string representation of Songs."""
+        self.assertEqual(str(self.testsong), self.testlib.get_smb_path(self.first_song_name))
+
+    def test_add_all_songs(self):
+        """Confirm that all files are added as expected to the library."""
+        # Test adding all songs from the model. Already done, do it again.
+        self.testlib.add_all_songs()
+        self.assertEqual(Song.objects.filter(library=self.testlib).count(), 10)
+        # Test adding all songs from the command line.
+        self.testlib.song_set.all().delete()
+        self.assertEqual(Song.objects.filter(library=self.testlib).count(), 0)
+        with self.assertLogs("django", level="INFO") as lm1:
+            call_command("syncdisk")
+        self.assertIn(f"INFO:django:Updating music library {self.testlib.shortname} from disk.", lm1.output)
+        self.assertEqual(Song.objects.filter(library=self.testlib).count(), 10)
+
+    def test_basename(self):
+        """Confirm basename functionality."""
+        self.assertEqual(self.testsong.basename(), os.path.basename(self.first_song_name))
 
 
 class MovieModelTests(TestCase):
@@ -474,6 +520,45 @@ class TvSeriesDetailViewTests(TestCase):
         )
         self.assertIn(response.status_code, [200, 302])
         self.assertEqual(Series.objects.filter(series_name=self.testser.series_name).count(), 0)
+
+
+class MusicViewTests(TestCase):
+    """Tests for the Music view."""
+
+    @classmethod
+    def setUpClass(cls):
+        """Create a temporary directory structure with known contents for testing."""
+        super(MusicViewTests, cls).setUpClass()
+        cls.dfac = DirectoryFactory()
+        cls.dfac.create_library()
+        cls.dfac.create_series(1)
+        cls.dfac.create_episodes(3, False, ".mp3")
+        cls.testlib = Library(
+            path=cls.dfac.libdir.name,
+            prefix=tempfile.gettempdir(),
+            servername="localhost",
+            shortname="testmusiclib2",
+            content_type=Library.ContentType.MUSIC,
+        )
+        cls.testlib.save()
+        cls.folder_names = [os.path.basename(x.name) for x in cls.dfac.series]
+
+    def check_for_content(self, expected_content):
+        """Check the music page repeatedly for content."""
+        response = self.client.get(reverse("tv:song_library", args=("testmusiclib2",)))
+        self.assertIn(response.status_code, [200, 302])
+        self.assertContains(response, expected_content)
+
+    def test_full_page_behavior(self):
+        """Exercise all parts of the Music page."""
+        # Must be a single test to avoid race conditions with data.
+        # Step 1: Check for the main music section.
+        e_c = f'<button class="collapsible default-open">{self.testlib.shortname}</button>'
+        self.check_for_content(e_c)
+        # Step 2: Check for the subfolder button.
+        for folder in self.folder_names:
+            e_c = f'<button class="collapsible">{folder}</button>'
+            self.check_for_content(e_c)
 
 
 class MovieViewTests(TestCase):

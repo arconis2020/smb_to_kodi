@@ -44,6 +44,8 @@ class Library(models.Model):
             self.add_all_series()
         elif ctype == self.ContentType.MOVIES:
             self.add_all_movies()
+        elif ctype == self.ContentType.MUSIC:
+            self.add_all_songs()
 
     def __str__(self):
         """Return an easy string representation."""
@@ -56,20 +58,36 @@ class Library(models.Model):
         rel_path = unicodedata.normalize("NFC", rel_path)
         return join("smb://", self.servername, rel_path)
 
-    def add_all_movies(self):
-        """Find all video files in this folder structrue, and add them as movies for this library."""
-        # First, find all of the episodes.
+    def scan_for_media(self, starting_path, mimetype_prefix):
+        """Help multiple functions scan for media using the same code."""
         found = []
-        for path in Path(self.path).rglob("*"):
+        for path in Path(starting_path).rglob("*"):
             if "@eaDir" in str(path):  # pragma: no cover
                 continue
             filetype = mimetypes.guess_type(path)[0]
             if filetype is None:
                 continue
-            if filetype.startswith("video/"):
+            if filetype.startswith(mimetype_prefix):
                 found.append(str(path))
-        # Now remove anything that wasn't found on disk.
         found = [self.get_smb_path(x) for x in found]
+        return found
+
+    def add_all_songs(self):
+        """Find all song files in this folder structrue, and add them as songs for this library."""
+        # First, find all of the songs.
+        found = self.scan_for_media(self.path, "audio/")
+        # Now remove anything that wasn't found on disk.
+        self.song_set.exclude(smb_path__in=found).delete()
+        # Now add anything that is new on disk.
+        to_add = set(found) - set(self.song_set.values_list("smb_path", flat=True))
+        to_add = [Song(library=self, smb_path=x) for x in to_add]
+        self.song_set.bulk_create(to_add)
+
+    def add_all_movies(self):
+        """Find all video files in this folder structrue, and add them as movies for this library."""
+        # First, find all of the Movies.
+        found = self.scan_for_media(self.path, "video/")
+        # Now remove anything that wasn't found on disk.
         self.movie_set.exclude(smb_path__in=found).delete()
         # Now add anything that is new on disk.
         to_add = set(found) - set(self.movie_set.values_list("smb_path", flat=True))
@@ -121,18 +139,9 @@ class Series(models.Model):
     def add_all_episodes(self):
         """Find all video files in this folder, and add them as episodes for this series."""
         # First, find all of the episodes.
-        found = []
         seriesdir = join(self.library.path, self.series_name)
-        for path in Path(seriesdir).rglob("*"):
-            if "@eaDir" in str(path):  # pragma: no cover
-                continue
-            filetype = mimetypes.guess_type(path)[0]
-            if filetype is None:
-                continue
-            if filetype.startswith("video/"):
-                found.append(str(path))
+        found = self.library.scan_for_media(seriesdir, "video/")
         # Now remove anything that wasn't found on disk.
-        found = [self.library.get_smb_path(x) for x in found]
         self.episode_set.exclude(smb_path__in=found).delete()
         # Now add anything that is new on disk.
         to_add = set(found) - set(self.episode_set.values_list("smb_path", flat=True))
@@ -178,3 +187,9 @@ class Movie(SMBFile):
 
     library = models.ForeignKey(Library, on_delete=models.CASCADE)
     last_watched = models.DateTimeField("Date last watched", blank=True, null=True)
+
+
+class Song(SMBFile):
+    """A representation of a single Song."""
+
+    library = models.ForeignKey(Library, on_delete=models.CASCADE)
