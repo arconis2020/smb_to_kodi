@@ -1,7 +1,6 @@
 """Class-based and function-based view backings for the URLs in the tv app."""
 from functools import lru_cache
 from random import choice
-from pathlib import Path
 from lxml import etree, html
 from django.http import HttpResponseRedirect, Http404
 from django.shortcuts import render
@@ -23,28 +22,24 @@ class NestedDocument:
 
     def add_media_file(self, smb_path, last_watched=None):
         """Add a media file with a smb_path attribute to the correct set of folders."""
-        # We'll need the path to be able to get things like file names and parents.
-        path = Path(smb_path)
         # Add a button element that will be used with javascript to play this file.
-        playbutton = html.HtmlElement("\u25b6")
-        playbutton.set("value", smb_path)
-        playbutton.set("class", "jsplay")
-        playbutton.set("style", "margin: 12px;")
+        folder, basename = smb_path.rsplit("/", 1)
+        attribs = {"value": smb_path, "class": "jsplay", "style": "margin: 12px;"}
+        playbutton = html.HtmlElement("\u25b6", attrib=attribs)
         playbutton.tag = "button"
         # Add the p element, with the button element as a nested element.
         para = etree.Element("p", {"style": "margin: 0;"})
-        para.append(playbutton)
         # Add a text span to allow for easier placement:
         txt = etree.Element("span")
-        txt.text = path.name
-        para.append(txt)
+        txt.text = basename
         # Add a last-watched date span to allow for easier placement:
         if bool(last_watched):
             lwe = etree.Element("span", {"style": "color: #3092F5;"})
             lwe.text = f"{last_watched:%Y-%m-%d}"
-            para.append(lwe)
+            para.extend([playbutton, txt, lwe])
+        else:
+            para.extend([playbutton, txt])
         # Add the folder to the divs dict with an appropriate div value.
-        folder = path.parent
         res = self.divs.setdefault(folder, etree.Element("div", {"class": "hidable"}))
         # Append the p element to the div/folder where it should live.
         res.append(para)
@@ -74,7 +69,7 @@ class NestedDocument:
         """Recurse just once through the folder parents, creating a set of stacked divs."""
         for folder in list(self.divs.keys()):
             while folder != self.shared_root:
-                parent = folder.parent
+                parent = folder.rsplit("/", 1)[0]
                 self._add_folder_to_parent(folder, parent)
                 folder = parent
 
@@ -88,7 +83,7 @@ class NestedDocument:
             if key == self.shared_root:
                 continue
             button = etree.Element("button", {"class": "collapsible"})
-            button.text = Path(key).name
+            button.text = key.split("/")[-1]
             element.addprevious(button)
 
 
@@ -160,11 +155,13 @@ def series_detail(request, shortname, series):
 def build_nested_view(library, object_list):
     """Build a nested view for use in both movie and music views."""
     # All media files have a single shared root folder at the library level.
-    shared_root = Path(library.get_smb_path(library.path))
+    shared_root = library.get_smb_path(library.path)
     doc = NestedDocument(shared_root)
     for obj in object_list:
-        lwn = getattr(obj, "last_watched", None)
-        doc.add_media_file(obj.smb_path, lwn)
+        if len(obj) == 1:
+            doc.add_media_file(obj[0])
+        else:
+            doc.add_media_file(obj[0], obj[1])
     doc.stack_folders()
     doc.sort_and_add_buttons()
     # Rendering the content this way allows proper sorting, as opposed to using the templates.
@@ -174,7 +171,7 @@ def build_nested_view(library, object_list):
 def music_view(request, shortname):
     """View the music list page with custom collapsibles."""
     this_library = Library.objects.get(shortname=shortname)
-    this_song_list = this_library.song_set.all().order_by("smb_path")
+    this_song_list = this_library.song_set.values_list("smb_path")
     rendered_content = build_nested_view(this_library, this_song_list)
     return render(request, "tv/movie_list.html", {"rendered_content": rendered_content, "library": this_library})
 
@@ -182,7 +179,7 @@ def music_view(request, shortname):
 def movie_view(request, shortname):
     """View the movie list page with custom collapsibles."""
     this_library = Library.objects.get(shortname=shortname)
-    this_movie_list = this_library.movie_set.all().order_by("smb_path")
+    this_movie_list = this_library.movie_set.values_list("smb_path", "last_watched")
     rendered_content = build_nested_view(this_library, this_movie_list)
     return render(request, "tv/movie_list.html", {"rendered_content": rendered_content, "library": this_library})
 
