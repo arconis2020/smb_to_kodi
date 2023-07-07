@@ -1,7 +1,7 @@
 {% include "./header.html" %}
 <a class="link" href="{% url 'tv:index' %}">Back to Library List</a>
 <div class="flex-container">
-    <button class="collapsible default-open">Active Series List</button>
+    <button class="collapsible default-open" id="Active_Series_List">Active Series List</button>
     <div class="hidable">
         {% if active_series_list %}
             <ul>
@@ -13,7 +13,7 @@
             <p>No series are active.</p>
         {% endif %}
     </div>
-    <button class="collapsible">New Series List</button>
+    <button class="collapsible" id="New_Series_List">New Series List</button>
     <div class="hidable">
         {% if new_series_list %}
             <ul>
@@ -25,7 +25,7 @@
             <p>No series are new.</p>
         {% endif %}
     </div>
-    <button class="collapsible">Complete Series List</button>
+    <button class="collapsible" id="Complete_Series_List">Complete Series List</button>
     <div class="hidable">
         {% if complete_series_list %}
             <ul>
@@ -37,7 +37,7 @@
             <p>No series are complete.</p>
         {% endif %}
     </div>
-    <button class="collapsible">Add Series</button>
+    <button class="collapsible" id="Add_Series">Add Series</button>
     <div class="hidable">
         <form method="post">
         {% csrf_token %}
@@ -49,7 +49,7 @@
         <input type="submit" value="Submit" formaction="{% url 'tv:add_series' shortname=library_shortname %}">
         </form>
     </div>
-    <button class="collapsible">Delete Library</button>
+    <button class="collapsible" id="Delete_Library">Delete Library</button>
     <div class="hidable">
         <form method="post">
         {% csrf_token %}

@@ -2,7 +2,7 @@
 <h1>{{ series_name }}</h1>
 <a class="link" href="{% url 'tv:series_library' shortname %}">Back to Series List</a>
 <div class="flex-container">
-<button class="collapsible default-open">Next Episode</button>
+<button class="collapsible default-open" id="Next_Episode">Next Episode</button>
 <div class="hidable">
 <form method="post">
 {% csrf_token %}
@@ -14,7 +14,7 @@
 </p>
 </form>
 </div>
-<button class="collapsible default-open">Random Episode</button>
+<button class="collapsible default-open" id="Random_Episode">Random Episode</button>
 <div class="hidable">
 <form method="post">
 {% csrf_token %}
@@ -26,7 +26,7 @@
 </p>
 </form>
 </div>
-<button class="collapsible default-open">Selected Episode</button>
+<button class="collapsible default-open" id="Selected_Episode">Selected Episode</button>
 <div class="hidable">
 <form method="post">
 {% csrf_token %}
@@ -42,7 +42,7 @@
 </p>
 </form>
 </div>
-<button class="collapsible">All Episodes</button>
+<button class="collapsible" id="All_Episodes">All Episodes</button>
 <div class="hidable">
 <form method="post" action="{% url 'tv:manage_all_episodes' shortname=shortname series=series_name %}">
 {% csrf_token %}
@@ -54,7 +54,7 @@
 </p>
 </form>
 </div>
-<button class="collapsible">Kodi Control</button>
+<button class="collapsible" id="Kodi_Control">Kodi Control</button>
 <div class="hidable">
 <form method="post" action="{% url 'tv:kodi_control' shortname=shortname series=series_name %}">
 {% csrf_token %}

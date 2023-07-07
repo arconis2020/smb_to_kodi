@@ -553,11 +553,11 @@ class MusicViewTests(TestCase):
         """Exercise all parts of the Music page."""
         # Must be a single test to avoid race conditions with data.
         # Step 1: Check for the main music section.
-        e_c = f'<button class="collapsible default-open">{self.testlib.shortname}</button>'
+        e_c = f"{self.testlib.shortname}</button>"
         self.check_for_content(e_c)
         # Step 2: Check for the subfolder button.
         for folder in self.folder_names:
-            e_c = f'<button class="collapsible">{folder}</button>'
+            e_c = f"{folder}</button>"
             self.check_for_content(e_c)
 
 
@@ -592,15 +592,15 @@ class MovieViewTests(TestCase):
         """Exercise all parts of the Movie page."""
         # Must be a single test to avoid race conditions with data.
         # Step 1: Check for the main movie section.
-        e_c = f'<button class="collapsible default-open">{self.testlib.shortname}</button>'
+        e_c = f"{self.testlib.shortname}</button>"
         self.check_for_content(e_c)
         # Step 2: Check for the subfolder button.
         for folder in self.folder_names:
-            e_c = f'<button class="collapsible">{folder}</button>'
+            e_c = f"{folder}</button>"
             self.check_for_content(e_c)
         # Step 3: Mark movies as watched, and confirm that the date shows up.
-        Movie.objects.all().update(last_watched=timezone.now())
-        e_c = f"{timezone.now():%Y-%m-%d}"
+        Movie.objects.all().update(last_watched=timezone.localtime())
+        e_c = f"{timezone.localtime():%Y-%m-%d}"
         self.check_for_content(e_c)
 
 

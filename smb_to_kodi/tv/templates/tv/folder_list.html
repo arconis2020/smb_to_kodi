@@ -1,0 +1,42 @@
+{% include "./header.html" %}
+{% comment %}
+This template is designed specifically to build a nested folder view, where you can click on folder names and expand the content of that folder, even recursing down a tree. To that end, it accepts parameters for divs, buttons, and paras, and renders all of the appropriate HTML elements for those pieces at the root of the DOM. The extra attributes for "data-parent" and "data-sibling" are then used by JS in /static/js/folder_list.js to rearrange the elements into the proper parent-child relationships.
+
+In the past, this same view was rendered from movie_view.html, but that original view relied on building the entire DOM in memory and then dumping it to the template to be reproduced without escapes. This new method is both more efficient and more in keeping with the way Django should be used.
+
+For the record, I also investigated rendering almost this entire view in Javascript, with the divs/buttons/paras objects available over a JSON endpoint. Testing shows that Javascript took over 10 seconds to add the roughly 20,000 HTML elements to the page, whether using a fragment or the DOM directly. While this method is only marginally faster than an extremely fine-tuned version of the build-in-memory method, this version is less resource intensive on the server end, and far easier to read.
+{% endcomment %}
+<a class="link" href="{% url 'tv:index' %}">Back to Library List</a>
+{% csrf_token %}
+<div class="flex-container" id="flexbase">
+    <button class="collapsible default-open" data-parent="flexbase" data-sibling="{{ top_div_id }}" style="display: none" id="Library_Shortname">{{ library.shortname }}</button>
+    {% spaceless %}
+    {% for div in divs.values|dictsort:"myid" %}
+        <div class="hidable" id="{{ div.myid }}" data-parent="{{ div.parent }}" style="display: none"></div>
+    {% endfor %}
+    {% for button in buttons.values|dictsort:"myid" %}
+        <button class="collapsible" id="{{ button.myid }}" data-parent="{{ button.parent }}" data-sibling="{{ button.sibling }}" style="display: none">{{ button.displayname }}</button>
+    {% endfor %}
+    {% for smb_path, para in paras.items %}
+        <p style="margin: 0px; display: none;" data-parent="{{ para.parent }}">
+            <button class="jsplay" value="{{ smb_path }}" style="margin: 12px;">&#9654</button>
+            <span>{{ para.displayname }}</span>
+            {% if para.last_watched is not None %}
+                <span style="color: #3092F5;">  {{ para.last_watched|date:'Y-m-d' }}</span>
+            {% endif %}
+        </p>
+    {% endfor %}
+    {% endspaceless %}
+    <button class="collapsible" id="Delete_Library">Delete Library</button>
+    <div class="hidable">
+        <form method="post">
+        {% csrf_token %}
+        <fieldset>
+            <label for="library">{{ library.shortname }}</label>
+            <input type="hidden" name="library" id="library" value="{{ library.shortname }}"><br/>
+        </fieldset>
+        <input type="submit" value="Submit" formaction="{% url 'tv:delete_library' %}">
+        </form>
+    </div>
+</div>
+{% include "./footer.html" %}

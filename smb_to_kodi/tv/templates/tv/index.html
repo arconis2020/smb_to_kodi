@@ -1,6 +1,6 @@
 {% include "./header.html" %}
 <div class="flex-container">
-    <button class="collapsible default-open">Libraries</button>
+    <button class="collapsible default-open" id="Libraries">Libraries</button>
     <div class="hidable">
         {% if library_list %}
             <ul>
@@ -18,7 +18,7 @@
             <p>No libraries are available.</p>
         {% endif %}
     </div>
-    <button class="collapsible">Player</button>
+    <button class="collapsible" id="Player">Player</button>
     <div class="hidable">
         <form method="post">
         {% csrf_token %}
@@ -29,7 +29,7 @@
         <input type="submit" value="Submit" formaction="{% url 'tv:add_player' %}">
         </form>
     </div>
-    <button class="collapsible">Add Library</button>
+    <button class="collapsible" id="Add_Library">Add Library</button>
     <div class="hidable">
         <form method="post">
         {% csrf_token %}

@@ -2,11 +2,11 @@
 <a class="link" href="{% url 'tv:index' %}">Back to Library List</a>
 {% csrf_token %}
 <div class="flex-container">
-    <button class="collapsible default-open">{{ library.shortname }}</button>
+    <button class="collapsible default-open" id="Library_Shortname">{{ library.shortname }}</button>
     {% autoescape off %}
     {{ rendered_content }}
     {% endautoescape %}
-    <button class="collapsible">Delete Library</button>
+    <button class="collapsible" id="Delete_Library">Delete Library</button>
     <div class="hidable">
         <form method="post">
         {% csrf_token %}

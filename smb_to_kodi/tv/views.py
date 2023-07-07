@@ -1,7 +1,8 @@
 """Class-based and function-based view backings for the URLs in the tv app."""
 from functools import lru_cache
 from random import choice
-from lxml import etree, html
+from string import ascii_letters, digits
+from sys import maxunicode
 from django.http import HttpResponseRedirect, Http404
 from django.shortcuts import render
 from django.urls import reverse
@@ -12,79 +13,19 @@ from .models import Player, Library, Series, Episode, Movie
 from .kodi import Kodi
 
 
-class NestedDocument:
-    """A representation of a nested set of elements in a document."""
+SAFE_CHARS = "".join([ascii_letters, digits, "-", "_", ":", "."])
+UNSAFE_CHARS = "".join([chr(x) for x in range(maxunicode) if chr(x) not in SAFE_CHARS])
+IDTRANSLATOR = str.maketrans(SAFE_CHARS + UNSAFE_CHARS, SAFE_CHARS + "".join(["_" for x in UNSAFE_CHARS]))
 
-    def __init__(self, shared_root):
-        """Set up the basic dictionary to keep track of elements."""
-        self.divs = {}  # Elements are added to folders using a key.
-        self.shared_root = shared_root
 
-    def add_media_file(self, smb_path, last_watched=None):
-        """Add a media file with a smb_path attribute to the correct set of folders."""
-        # Add a button element that will be used with javascript to play this file.
-        folder, basename = smb_path.rsplit("/", 1)
-        attribs = {"value": smb_path, "class": "jsplay", "style": "margin: 12px;"}
-        playbutton = html.HtmlElement("\u25b6", attrib=attribs)
-        playbutton.tag = "button"
-        # Add the p element, with the button element as a nested element.
-        para = etree.Element("p", {"style": "margin: 0;"})
-        # Add a text span to allow for easier placement:
-        txt = etree.Element("span")
-        txt.text = basename
-        # Add a last-watched date span to allow for easier placement:
-        if bool(last_watched):
-            lwe = etree.Element("span", {"style": "color: #3092F5;"})
-            lwe.text = f"{last_watched:%Y-%m-%d}"
-            para.extend([playbutton, txt, lwe])
-        else:
-            para.extend([playbutton, txt])
-        # Add the folder to the divs dict with an appropriate div value.
-        res = self.divs.setdefault(folder, etree.Element("div", {"class": "hidable"}))
-        # Append the p element to the div/folder where it should live.
-        res.append(para)
+@lru_cache(maxsize=None)
+def get_html_id(path):
+    """
+    Generate an HTML-safe ID tag base on a path.
 
-    @lru_cache(maxsize=4096)
-    def _add_folder_to_parent(self, folder, parent):
-        """
-        Add a folder to a parent, but remember if it's been done.
-
-        As an example of why this is LRU cache is necessary, imagine a folder structure
-        like this:
-        By Artist/A/{many artists starting with A}
-
-        In this scenario, the stack_folders function is going to try to add the "A" folder
-        to the "By Artist" folder as many times as there are songs in the artist folders
-        under "A". Only the first attempt to add "A" to "By Artist" makes any sense, and
-        the rest are ignored by ElementTree anyway (previous implementations show this),
-        so we want to completely skip any action on subsequent adds to speed things up.
-
-        The LRU cache here improves the Music view load time by 2 orders of magnitude
-        on my highly nested music collection.
-        """
-        res = self.divs.setdefault(parent, etree.Element("div", {"class": "hidable"}))
-        res.append(self.divs[folder])
-
-    def stack_folders(self):
-        """Recurse just once through the folder parents, creating a set of stacked divs."""
-        for folder in list(self.divs.keys()):
-            while folder != self.shared_root:
-                parent = folder.rsplit("/", 1)[0]
-                self._add_folder_to_parent(folder, parent)
-                folder = parent
-
-    def sort_and_add_buttons(self):
-        """Sort the document in place and then add the collapsible buttons."""
-        # Sort the element tree with divs first, then p's, at each level.
-        for parent in self.divs[self.shared_root].xpath("//*[./*]"):
-            parent[:] = sorted(parent, key=lambda x: x.tag)
-        # Use the fact that we can address each folder to add a collapsible button to each folder.
-        for key, element in self.divs.items():
-            if key == self.shared_root:
-                continue
-            button = etree.Element("button", {"class": "collapsible"})
-            button.text = key.split("/")[-1]
-            element.addprevious(button)
+    String translation is used here because it is 86% faster on my computer than using re.sub.
+    """
+    return path.translate(IDTRANSLATOR)
 
 
 class IndexView(generic.ListView):
@@ -153,35 +94,58 @@ def series_detail(request, shortname, series):
 
 
 def build_nested_view(library, object_list):
-    """Build a nested view for use in both movie and music views."""
-    # All media files have a single shared root folder at the library level.
+    """Build a set of prototypes for a nested folder view."""
     shared_root = library.get_smb_path(library.path)
-    doc = NestedDocument(shared_root)
+    buttons = {}
+    divs = {}
+    paras = {}
     for obj in object_list:
-        if len(obj) == 1:
-            doc.add_media_file(obj[0])
-        else:
-            doc.add_media_file(obj[0], obj[1])
-    doc.stack_folders()
-    doc.sort_and_add_buttons()
-    # Rendering the content this way allows proper sorting, as opposed to using the templates.
-    return etree.tostring(doc.divs[shared_root], encoding="unicode", pretty_print=True)
+        folder, basename = obj[0].rsplit("/", 1)
+        folderid = get_html_id(folder)
+        paras[obj[0]] = {"parent": folderid, "displayname": basename, "last_watched": obj[1] if len(obj) > 1 else None}
+        divs.setdefault(folder, {"myid": folderid})
+    for folder in list(divs.keys()):
+        while folder != shared_root:
+            parent, basename = folder.rsplit("/", 1)
+            parentid = get_html_id(parent)
+            buttonid = f"button.{divs[folder]['myid']}"
+            buttons.setdefault(
+                folder, {"myid": buttonid, "parent": parentid, "sibling": divs[folder]["myid"], "displayname": basename}
+            )
+            divs[folder].update({"parent": parentid})
+            divs.setdefault(parent, {"myid": parentid})
+            folder = parent
+    divs[shared_root].update({"parent": "flexbase"})
+    top_div_id = divs[shared_root]["myid"]
+    return (buttons, divs, paras, top_div_id)
 
 
 def music_view(request, shortname):
     """View the music list page with custom collapsibles."""
     this_library = Library.objects.get(shortname=shortname)
     this_song_list = this_library.song_set.values_list("smb_path")
-    rendered_content = build_nested_view(this_library, this_song_list)
-    return render(request, "tv/movie_list.html", {"rendered_content": rendered_content, "library": this_library})
+    # The structure built here will render into HTML unsorted, and be sorted by JS.
+    # This is the fastest way to provide a nested folder view to the user as well as the most django-friendly.
+    (buttons, divs, paras, top_div_id) = build_nested_view(this_library, this_song_list)
+    return render(
+        request,
+        "tv/folder_list.html",
+        {"buttons": buttons, "divs": divs, "paras": paras, "top_div_id": top_div_id, "library": this_library},
+    )
 
 
 def movie_view(request, shortname):
     """View the movie list page with custom collapsibles."""
     this_library = Library.objects.get(shortname=shortname)
     this_movie_list = this_library.movie_set.values_list("smb_path", "last_watched")
-    rendered_content = build_nested_view(this_library, this_movie_list)
-    return render(request, "tv/movie_list.html", {"rendered_content": rendered_content, "library": this_library})
+    # The structure built here will render into HTML unsorted, and be sorted by JS.
+    # This is the fastest way to provide a nested folder view to the user as well as the most django-friendly.
+    (buttons, divs, paras, top_div_id) = build_nested_view(this_library, this_movie_list)
+    return render(
+        request,
+        "tv/folder_list.html",
+        {"buttons": buttons, "divs": divs, "paras": paras, "top_div_id": top_div_id, "library": this_library},
+    )
 
 
 def play(request, shortname=None, series=None):
@@ -200,7 +164,8 @@ def play(request, shortname=None, series=None):
                 this_movie = Movie.objects.get(pk=mypath)
             except Movie.DoesNotExist:  # pragma: no cover
                 return HttpResponseRedirect(request.META["HTTP_REFERER"])  # pragma: no cover - safe fallback only.
-            this_movie.last_watched = timezone.now()
+            # Lesson learned - you need localtime here because now() is always UTC by default.
+            this_movie.last_watched = timezone.localtime()
             this_movie.save()
     if all([bool(shortname), bool(series)]):
         return HttpResponseRedirect(reverse("tv:episodes", args=(shortname, series)))

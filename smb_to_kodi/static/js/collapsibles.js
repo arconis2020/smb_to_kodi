@@ -51,10 +51,6 @@ var coll = document.getElementsByClassName("collapsible");
 var i;
 
 for (i = 0; i < coll.length; i++) {
-    // Add repeatable IDs to all buttons using the buttons' inner text.
-    if (!coll[i].getAttribute("id")) {
-        coll[i].setAttribute("id", coll[i].innerText);
-    }
     // Add click listeners.
     coll[i].addEventListener("click", function() {
         var content = this.nextElementSibling;
