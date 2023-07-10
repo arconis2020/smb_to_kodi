@@ -3,7 +3,7 @@ from functools import lru_cache
 from random import choice
 from string import ascii_letters, digits
 from sys import maxunicode
-from django.http import HttpResponseRedirect, Http404
+from django.http import HttpResponseRedirect, Http404, JsonResponse
 from django.shortcuts import render
 from django.urls import reverse
 from django.views import generic
@@ -102,7 +102,7 @@ def build_nested_view(library, object_list):
     for obj in object_list:
         folder, basename = obj[0].rsplit("/", 1)
         folderid = get_html_id(folder)
-        paras[obj[0]] = {"parent": folderid, "displayname": basename, "last_watched": obj[1] if len(obj) > 1 else None}
+        paras[obj[0]] = {"parent": folderid, "displayname": basename, "last_watched": obj[1].strftime("%Y-%m-%d") if len(obj) > 1 and obj[1] is not None else None}
         divs.setdefault(folder, {"myid": folderid})
     for folder in list(divs.keys()):
         while folder != shared_root:
@@ -116,35 +116,32 @@ def build_nested_view(library, object_list):
             divs.setdefault(parent, {"myid": parentid})
             folder = parent
     divs[shared_root].update({"parent": "flexbase"})
-    top_div_id = divs[shared_root]["myid"]
-    return (buttons, divs, paras, top_div_id)
+    return (buttons, divs, paras)
 
 
-def music_view(request, shortname):
-    """View the music list page with custom collapsibles."""
+def music_json_content(request, shortname):
+    """Fetch the JSON body for the music view."""
     this_library = Library.objects.get(shortname=shortname)
     this_song_list = this_library.song_set.values_list("smb_path")
-    # The structure built here will render into HTML unsorted, and be sorted by JS.
-    # This is the fastest way to provide a nested folder view to the user as well as the most django-friendly.
-    (buttons, divs, paras, top_div_id) = build_nested_view(this_library, this_song_list)
-    return render(
-        request,
-        "tv/folder_list.html",
-        {"buttons": buttons, "divs": divs, "paras": paras, "top_div_id": top_div_id, "library": this_library},
-    )
+    (buttons, divs, paras) = build_nested_view(this_library, this_song_list)
+    return JsonResponse({"buttons": buttons, "divs": divs, "paras": paras}, json_dumps_params={"separators": (",", ":"), "sort_keys": True})
 
 
-def movie_view(request, shortname):
-    """View the movie list page with custom collapsibles."""
+def movie_json_content(request, shortname):
+    """Fetch the JSON body for the movie view."""
     this_library = Library.objects.get(shortname=shortname)
     this_movie_list = this_library.movie_set.values_list("smb_path", "last_watched")
-    # The structure built here will render into HTML unsorted, and be sorted by JS.
-    # This is the fastest way to provide a nested folder view to the user as well as the most django-friendly.
-    (buttons, divs, paras, top_div_id) = build_nested_view(this_library, this_movie_list)
+    (buttons, divs, paras) = build_nested_view(this_library, this_movie_list)
+    return JsonResponse({"buttons": buttons, "divs": divs, "paras": paras}, json_dumps_params={"separators": (",", ":"), "sort_keys": True})
+
+
+def movie_music_view(request, shortname):
+    """View the music or movie list page with custom collapsibles."""
+    this_library = Library.objects.get(shortname=shortname)
     return render(
         request,
         "tv/folder_list.html",
-        {"buttons": buttons, "divs": divs, "paras": paras, "top_div_id": top_div_id, "library": this_library},
+        {"library": this_library},
     )
 
 

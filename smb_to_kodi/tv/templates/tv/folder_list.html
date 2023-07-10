@@ -9,24 +9,8 @@ For the record, I also investigated rendering almost this entire view in Javascr
 <a class="link" href="{% url 'tv:index' %}">Back to Library List</a>
 {% csrf_token %}
 <div class="flex-container" id="flexbase">
-    <button class="collapsible default-open" data-parent="flexbase" data-sibling="{{ top_div_id }}" style="display: none" id="Library_Shortname">{{ library.shortname }}</button>
-    {% spaceless %}
-    {% for div in divs.values|dictsort:"myid" %}
-        <div class="hidable" id="{{ div.myid }}" data-parent="{{ div.parent }}" style="display: none"></div>
-    {% endfor %}
-    {% for button in buttons.values|dictsort:"myid" %}
-        <button class="collapsible" id="{{ button.myid }}" data-parent="{{ button.parent }}" data-sibling="{{ button.sibling }}" style="display: none">{{ button.displayname }}</button>
-    {% endfor %}
-    {% for smb_path, para in paras.items %}
-        <p style="margin: 0px; display: none;" data-parent="{{ para.parent }}">
-            <button class="jsplay" value="{{ smb_path }}" style="margin: 12px;">&#9654</button>
-            <span>{{ para.displayname }}</span>
-            {% if para.last_watched is not None %}
-                <span style="color: #3092F5;">  {{ para.last_watched|date:'Y-m-d' }}</span>
-            {% endif %}
-        </p>
-    {% endfor %}
-    {% endspaceless %}
+    <button class="collapsible default-open" id="Library_Shortname">{{ library.shortname }}</button>
+    <div id="replaceme"></div>
     <button class="collapsible" id="Delete_Library">Delete Library</button>
     <div class="hidable">
         <form method="post">
