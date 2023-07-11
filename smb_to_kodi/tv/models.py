@@ -89,11 +89,13 @@ class Library(models.Model):
         """Find all video files in this folder structrue, and add them as movies for this library."""
         # First, find all of the Movies.
         found = list(self.scan_for_media(self.path, "video/"))
+        # Now get the basenames of everything in the library for watch marking.
+        current = {x.basename(): x.last_watched for x in self.movie_set.filter(last_watched__isnull=False)}
         # Now remove anything that wasn't found on disk.
         self.movie_set.exclude(smb_path__in=found).delete()
         # Now add anything that is new on disk.
         to_add = set(found) - set(self.movie_set.values_list("smb_path", flat=True))
-        to_add = [Movie(library=self, smb_path=x) for x in to_add]
+        to_add = [Movie(library=self, smb_path=x, last_watched=current.get(basename(x), None)) for x in to_add]
         self.movie_set.bulk_create(to_add)
 
     def add_all_series(self):
