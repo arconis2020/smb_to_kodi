@@ -102,7 +102,11 @@ def build_nested_view(library, object_list):
     for obj in object_list:
         folder, basename = obj[0].rsplit("/", 1)
         folderid = get_html_id(folder)
-        paras[obj[0]] = {"parent": folderid, "displayname": basename, "last_watched": obj[1].strftime("%Y-%m-%d") if len(obj) > 1 and obj[1] is not None else None}
+        paras[obj[0]] = {
+            "parent": folderid,
+            "displayname": basename,
+            "last_watched": obj[1].strftime("%Y-%m-%d") if len(obj) > 1 and obj[1] is not None else None,
+        }
         divs.setdefault(folder, {"myid": folderid})
     for folder in list(divs.keys()):
         while folder != shared_root:
@@ -124,7 +128,10 @@ def music_json_content(request, shortname):
     this_library = Library.objects.get(shortname=shortname)
     this_song_list = this_library.song_set.values_list("smb_path")
     (buttons, divs, paras) = build_nested_view(this_library, this_song_list)
-    return JsonResponse({"buttons": buttons, "divs": divs, "paras": paras}, json_dumps_params={"separators": (",", ":"), "sort_keys": True})
+    return JsonResponse(
+        {"buttons": buttons, "divs": divs, "paras": paras},
+        json_dumps_params={"separators": (",", ":"), "sort_keys": True},
+    )
 
 
 def movie_json_content(request, shortname):
@@ -132,7 +139,10 @@ def movie_json_content(request, shortname):
     this_library = Library.objects.get(shortname=shortname)
     this_movie_list = this_library.movie_set.values_list("smb_path", "last_watched")
     (buttons, divs, paras) = build_nested_view(this_library, this_movie_list)
-    return JsonResponse({"buttons": buttons, "divs": divs, "paras": paras}, json_dumps_params={"separators": (",", ":"), "sort_keys": True})
+    return JsonResponse(
+        {"buttons": buttons, "divs": divs, "paras": paras},
+        json_dumps_params={"separators": (",", ":"), "sort_keys": True},
+    )
 
 
 def movie_music_view(request, shortname):

@@ -6,10 +6,13 @@ import black
 import pycodestyle
 import pydocstyle
 from django.core.management import call_command
-from django.test import TestCase
+from django.test import TestCase, LiveServerTestCase
 from django.urls import reverse
 from django.utils import timezone
 from requests.exceptions import ConnectionError
+from selenium.webdriver.common.by import By
+from selenium.webdriver.firefox.webdriver import WebDriver
+from selenium.webdriver.support.wait import WebDriverWait
 
 
 from .admin import (
@@ -20,6 +23,7 @@ from .admin import (
 )
 from .models import Player, Library, Series, Episode, Movie, Song
 from .kodi import Kodi
+from .views import get_html_id
 
 
 class DirectoryFactory:  # pylint: disable=R1732
@@ -522,7 +526,7 @@ class TvSeriesDetailViewTests(TestCase):
         self.assertEqual(Series.objects.filter(series_name=self.testser.series_name).count(), 0)
 
 
-class MusicViewTests(TestCase):
+class MusicViewTests(LiveServerTestCase):
     """Tests for the Music view."""
 
     @classmethod
@@ -542,26 +546,38 @@ class MusicViewTests(TestCase):
         )
         cls.testlib.save()
         cls.folder_names = [os.path.basename(x.name) for x in cls.dfac.series]
+        cls.selenium = WebDriver()
+        cls.selenium.implicitly_wait(10)
 
-    def check_for_content(self, expected_content):
-        """Check the music page repeatedly for content."""
-        response = self.client.get(reverse("tv:song_library", args=("testmusiclib2",)))
-        self.assertIn(response.status_code, [200, 302])
-        self.assertContains(response, expected_content)
+    @classmethod
+    def tearDownClass(cls):
+        """Clean up Selenium."""
+        cls.selenium.quit()
+        super().tearDownClass()
 
     def test_full_page_behavior(self):
         """Exercise all parts of the Music page."""
-        # Must be a single test to avoid race conditions with data.
-        # Step 1: Check for the main music section.
-        e_c = f"{self.testlib.shortname}</button>"
-        self.check_for_content(e_c)
-        # Step 2: Check for the subfolder button.
-        for folder in self.folder_names:
-            e_c = f"{folder}</button>"
-            self.check_for_content(e_c)
+        # Implemented as a single test to reduce Selenium get calls.
+        self.selenium.get(f"{self.live_server_url}/tv/music/{self.testlib.shortname}")
+        # Wait for the paras to be added.
+        _ = WebDriverWait(self.selenium, timeout=3).until(lambda d: d.find_element(By.TAG_NAME, "p"))
+        # Step 1: Check for expected buttons.
+        exp_buttons = [self.testlib.shortname, "Delete Library"] + self.folder_names
+        cur_buttons = self.selenium.find_elements(By.CLASS_NAME, "collapsible")
+        subtexts = [s.text for s in cur_buttons]
+        self.assertEqual(set(subtexts), set(exp_buttons))
+        # Step 2: Check for expected divs.
+        root = self.testlib.get_smb_path(self.testlib.path)
+        exp_div_ids = [get_html_id(root)] + [get_html_id(f"{root}/{x}") for x in self.folder_names]
+        divs = self.selenium.find_elements(By.CLASS_NAME, "hidable")
+        self.assertEqual([d.get_attribute("id") for d in divs if d.get_attribute("id")], exp_div_ids)
+        # Step 3: Check for expected play buttons.
+        exp_button_vals = [m.smb_path for m in self.testlib.song_set.all()]
+        play_buttons = self.selenium.find_elements(By.CLASS_NAME, "jsplay")
+        self.assertEqual([p.get_attribute("value") for p in play_buttons], exp_button_vals)
 
 
-class MovieViewTests(TestCase):
+class MovieViewTests(LiveServerTestCase):
     """Tests for the Movie view."""
 
     @classmethod
@@ -581,27 +597,43 @@ class MovieViewTests(TestCase):
         )
         cls.testlib.save()
         cls.folder_names = [os.path.basename(x.name) for x in cls.dfac.series]
+        cls.selenium = WebDriver()
+        cls.selenium.implicitly_wait(10)
+        # Mark all movies watched in order to test display of last-watched date.
+        Movie.objects.all().update(last_watched=timezone.localtime())
 
-    def check_for_content(self, expected_content):
-        """Check the movie page repeatedly for content."""
-        response = self.client.get(reverse("tv:movie_library", args=("testmovielib2",)))
-        self.assertIn(response.status_code, [200, 302])
-        self.assertContains(response, expected_content)
+    @classmethod
+    def tearDownClass(cls):
+        """Clean up Selenium."""
+        cls.selenium.quit()
+        super().tearDownClass()
 
     def test_full_page_behavior(self):
         """Exercise all parts of the Movie page."""
-        # Must be a single test to avoid race conditions with data.
-        # Step 1: Check for the main movie section.
-        e_c = f"{self.testlib.shortname}</button>"
-        self.check_for_content(e_c)
-        # Step 2: Check for the subfolder button.
-        for folder in self.folder_names:
-            e_c = f"{folder}</button>"
-            self.check_for_content(e_c)
-        # Step 3: Mark movies as watched, and confirm that the date shows up.
-        Movie.objects.all().update(last_watched=timezone.localtime())
-        e_c = f"{timezone.localtime():%Y-%m-%d}"
-        self.check_for_content(e_c)
+        # Implemented as a single test to reduce Selenium get calls.
+        self.selenium.get(f"{self.live_server_url}/tv/movies/{self.testlib.shortname}")
+        # Wait for the paras to be added.
+        _ = WebDriverWait(self.selenium, timeout=3).until(lambda d: d.find_element(By.TAG_NAME, "p"))
+        # Step 1: Check for expected buttons.
+        exp_buttons = [self.testlib.shortname, "Delete Library"] + self.folder_names
+        cur_buttons = self.selenium.find_elements(By.CLASS_NAME, "collapsible")
+        subtexts = [s.text for s in cur_buttons]
+        self.assertEqual(set(subtexts), set(exp_buttons))
+        # Step 2: Check for expected divs.
+        root = self.testlib.get_smb_path(self.testlib.path)
+        exp_div_ids = [get_html_id(root)] + [get_html_id(f"{root}/{x}") for x in self.folder_names]
+        divs = self.selenium.find_elements(By.CLASS_NAME, "hidable")
+        self.assertEqual([d.get_attribute("id") for d in divs if d.get_attribute("id")], exp_div_ids)
+        # Step 3: Check for expected play buttons.
+        exp_button_vals = [m.smb_path for m in self.testlib.movie_set.all()]
+        play_buttons = self.selenium.find_elements(By.CLASS_NAME, "jsplay")
+        self.assertEqual([p.get_attribute("value") for p in play_buttons], exp_button_vals)
+        # Step 4: Check for last watched spans.
+        spans = self.selenium.find_elements(By.TAG_NAME, "span")
+        exp_date = f"  {timezone.localtime():%Y-%m-%d}"
+        dates = [x.get_attribute("innerHTML") for x in spans]
+        dates = [d for d in dates if d == exp_date]
+        self.assertEqual(len(dates), len(self.dfac.episodes))
 
 
 @patch("tv.kodi.requests.post")

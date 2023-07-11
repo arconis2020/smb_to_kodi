@@ -5,4 +5,4 @@ load-plugins=pylint_django
 ignore-paths=tv/migrations
 disable=E1120,W0622,logging-fstring-interpolation
 enable=logging-format-interpolation
-extension-pkg-whitelist=lxml
+extension-pkg-whitelist=lxml,selenium
