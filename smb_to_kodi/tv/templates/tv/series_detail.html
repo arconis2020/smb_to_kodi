@@ -56,22 +56,7 @@
 </div>
 <button class="collapsible" id="Kodi_Control">Kodi Control</button>
 <div class="hidable">
-<form method="post" action="{% url 'tv:kodi_control' shortname=shortname series=series_name %}">
-{% csrf_token %}
-<p>
-<button type="radio" name="action" id="subs_off" value="subs_off">Turn off subtitles</button><br/>
-<button type="radio" name="action" id="subs_on" value="subs_on">Turn on subtitles</button><br/>
-<button type="radio" name="action" id="next_item" value="next_item">Advance to the next playlist item</button><br/>
-<button type="radio" name="action" id="next_stream" value="next_stream">Switch to the next audio stream</button><br/>
-<button type="radio" name="action" id="passthrough" value="passthrough">
-{% if passthrough_state %}
-Disable audio passthrough
-{% else %}
-Enable audio passthrough
-{% endif %}
-</button>
-</p>
-</form>
+{% include "./kodi_control_form.html" %}
 </div>
 </div>
 {% include "./footer.html" %}

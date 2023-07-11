@@ -9,6 +9,7 @@ urlpatterns = [
     path("add_library", views.add_library, name="add_library"),
     path("add_player", views.add_player, name="add_player"),
     path("delete_library", views.delete_library, name="delete_library"),
+    path("kodi_control", views.kodi_control_standalone, name="kodi_control_standalone"),
     path("music/play", views.play, name="play_song"),
     path("music/<str:shortname>/json_content", views.music_json_content, name="song_library_content"),
     path("music/<str:shortname>", views.movie_music_view, name="song_library"),

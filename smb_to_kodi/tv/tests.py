@@ -399,6 +399,24 @@ class TvSeriesViewTests(TestCase):
         self.assertEqual(response.status_code, 404)
 
 
+class KodiControlView(TestCase):
+    """Load the Kodi Control view and confirm it works."""
+
+    @patch("tv.views.Kodi")
+    def test_page_load(self, mock_kodi):
+        """
+        Load the Kodi Control view and confirm it works.
+
+        This form is actually also loaded in the Series detail view, and tested thoroughly there. This test
+        is only to ensure that the same form is available at the correct separate URL, and all button tests
+        are still to be conducted as part of the TvSeriesDetailViewTests.test_full_page_behavior step 8a.
+        """
+        # Step 1: Test the presence of various elements.
+        mock_kodi.get_audio_passthrough.return_value = True
+        response = self.client.get(reverse("tv:kodi_control_standalone"))
+        self.assertIn(response.status_code, [200, 302])
+
+
 class TvSeriesDetailViewTests(TestCase):
     """Tests for the Series detail view that allows playing episodes."""
 

@@ -218,7 +218,21 @@ def mark_watched_up_to(request, shortname, series):
     return HttpResponseRedirect(reverse("tv:episodes", args=(shortname, series)))
 
 
-def kodi_control(request, shortname, series):
+def kodi_control_standalone(request):
+    """Show the simple standalone Kodi control form."""
+    current_passthrough = Kodi().get_audio_passthrough()
+    return render(
+        request,
+        "tv/kodi_control.html",
+        {
+            "series_name": None,
+            "shortname": None,
+            "passthrough_state": current_passthrough,
+        },
+    )
+
+
+def kodi_control(request, shortname=None, series=None):
     """Issue commands to Kodi based on the form selection (POST target)."""
     this_action = request.POST["action"]
     k = Kodi()
@@ -233,7 +247,9 @@ def kodi_control(request, shortname, series):
     elif this_action == "passthrough":
         # The page essentially gives you the option to toggle, so let's do that here.
         k.set_audio_passthrough(not k.get_audio_passthrough())
-    return HttpResponseRedirect(reverse("tv:episodes", args=(shortname, series)))
+    if all([bool(shortname), bool(series), shortname != "None", series != "None"]):
+        return HttpResponseRedirect(reverse("tv:episodes", args=(shortname, series)))
+    return HttpResponseRedirect(request.META["HTTP_REFERER"])  # pragma: no cover - safe fallback only.
 
 
 def add_library(request):
