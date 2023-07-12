@@ -1,6 +1,6 @@
 const csrftoken = document.cookie
     .split(";")
-    .find((row) => row.startsWith("csrftoken="))
+    .find((row) => row.includes("csrftoken="))
     ?.split("=")[1];
 
 async function setUpPlayButtons() {
