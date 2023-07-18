@@ -54,6 +54,7 @@ You will need to add a Player configuration and at least 1 library to start usin
 ### A Note On Sorting
 All media files are sorted using their fully-qualified samba/SMB path, and the sort is case-sensitive. This means that the order in which Series content will be played is consistent and predictable, but depends on how you have organized your media collection. You may need to create new folders, add leading zeroes to episode/season numbers, or use other tricks to ensure that episodes are played in the correct order. The recommended format for Series-type content would look like this, using Downton Abbey (and its 2 feature-length specials) as an example:
 
+```
 Downton Abbey
 |- Season 1
    |- 101.mkv
@@ -63,6 +64,7 @@ Downton Abbey
 |- Speacial Features
    |- Downton Abbey (2019).mkv
    |- Downton Abbey - A New Era (2022).mkv
+```
 
 Note how the two movies in the Special Features folder sort alphabetically in the correct order, and how "Special Features" comes after "Season" so that these movies will show up at the end.
 
