@@ -23,7 +23,7 @@ class Kodi:
         try:
             res = requests.post(url=self.url, json=paramdict, headers=self.headers, timeout=3)
             return res.json()
-        except requests.exceptions.ConnectionError:
+        except requests.exceptions.RequestException:
             return {"result": {"connection": False}}
 
     def _select_ids(self, filename):
@@ -56,7 +56,10 @@ class Kodi:
             # Got a list of active players.
             active_players = [x["playerid"] for x in res["result"]]
             return active_players[0] if len(active_players) > 0 else None
-        return None
+        # In the specific event that Kodi is unreachable, return False to let the caller know.
+        if res["result"] == {"connection": False}:
+            return False
+        return None  # This is for when Kodi IS reachable but there are no active players.
 
     def now_playing(self):
         """Obtain the name of the currently playing item, if any, and confirm the player is playing."""
