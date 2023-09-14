@@ -59,10 +59,14 @@ class Library(models.Model):
         rel_path = unicodedata.normalize("NFC", rel_path)
         return join("smb://", self.servername, rel_path)
 
-    def scan_for_media(self, starting_path, mimetype_prefix):
+    def scan_for_media(self, starting_path, mimetype_prefix):  # pylint: disable=R1710
         """Generate filenames recursively through paths."""
         # This custom method is 20% faster than os.walk, and 47% faster than Path.rglob.
-        for direntry in scandir(starting_path):
+        try:
+            dirs = scandir(starting_path)
+        except FileNotFoundError:
+            return []
+        for direntry in dirs:
             if "@eaDir" in direntry.path:  # pragma: no cover
                 continue
             if direntry.is_dir(follow_symlinks=False):
