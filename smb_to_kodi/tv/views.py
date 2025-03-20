@@ -52,12 +52,15 @@ class SeriesView(generic.ListView):
         """Add page context items for better rendering."""
         context = super().get_context_data(**kwargs)
         context["library_shortname"] = self.kwargs["shortname"]
+        this_library = Library.objects.get(shortname=self.kwargs["shortname"])
         (
             context["active_series_list"],
             context["new_series_list"],
             context["complete_series_list"],
-        ) = Library.objects.get(shortname=self.kwargs["shortname"]).get_series_by_state()
+        ) = this_library.get_series_by_state()
         context["current_player"] = Player.objects.get(pk=1).address if Player.objects.count() == 1 else ""
+        context["content_types"] = Library.ContentType.choices
+        context["library"] = this_library
         return context
 
     def get_queryset(self):
@@ -71,11 +74,17 @@ class SeriesView(generic.ListView):
 
 def series_detail(request, shortname, series):
     """View the episode control page for a single series."""
+    if series == "json_content":
+        raise Http404("No JSON content available.")
     this_series = Episode.objects.filter(series=series).order_by("smb_path")
     # Enable an automatic "lazy" load on first access.
     if this_series.count() == 0:
-        Series.objects.get(pk=series).add_all_episodes()
+        try:
+            Series.objects.get(pk=series).add_all_episodes()
+        except Series.DoesNotExist:
+            raise Http404("No Series of that name is present in the library.")
     unwatched = this_series.filter(watched=False).order_by("smb_path")
+    comp_pct = unwatched[0].series.comp_pct if bool(unwatched) else 0
     next_episode = unwatched[0] if bool(unwatched) else "No episodes loaded"
     random_episode = choice(unwatched) if bool(unwatched) else "No episodes loaded"
     current_passthrough = Kodi().get_audio_passthrough()
@@ -86,6 +95,7 @@ def series_detail(request, shortname, series):
             "next_episode": next_episode,
             "random_episode": random_episode,
             "series_name": series,
+            "comp_pct": comp_pct,
             "shortname": shortname,
             "eplist": this_series,
             "passthrough_state": current_passthrough,
@@ -151,7 +161,7 @@ def movie_music_view(request, shortname):
     return render(
         request,
         "tv/folder_list.html",
-        {"library": this_library},
+        {"library": this_library, "content_types": Library.ContentType.choices},
     )
 
 
@@ -266,6 +276,21 @@ def add_library(request):
         shortname=this_shortname,
         content_type=this_content_type,
     )
+    this_library.save()
+    return HttpResponseRedirect(reverse("tv:index"))
+
+
+def edit_library(request):
+    """Edit a current library in the database (POST target)."""
+    this_library_shortname = request.POST["library"]
+    try:
+        this_library = Library.objects.get(shortname=this_library_shortname)
+    except Library.DoesNotExist:  # pragma: no cover
+        return HttpResponseRedirect(reverse("tv:index"))
+    this_library.path = request.POST["path"]
+    this_library.prefix = request.POST["prefix"]
+    this_library.servername = request.POST["servername"]
+    this_library.content_type = request.POST["content_type"]
     this_library.save()
     return HttpResponseRedirect(reverse("tv:index"))
 

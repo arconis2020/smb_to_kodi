@@ -7,6 +7,7 @@ app_name = "tv"
 urlpatterns = [
     path("", views.IndexView.as_view(), name="index"),
     path("add_library", views.add_library, name="add_library"),
+    path("edit_library", views.edit_library, name="edit_library"),
     path("add_player", views.add_player, name="add_player"),
     path("delete_library", views.delete_library, name="delete_library"),
     path("kodi_control", views.kodi_control_standalone, name="kodi_control_standalone"),

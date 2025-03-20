@@ -156,6 +156,13 @@ class Series(models.Model):
         to_add = [Episode(series=self, smb_path=x) for x in to_add]
         self.episode_set.bulk_create(to_add)
 
+    @property
+    def comp_pct(self):
+        """Calculate the completion percentage of the series based on watched episodes."""
+        # Use one query, and no objectification, to speed up processing.
+        watches = list(self.episode_set.values_list("watched", flat=True))
+        return round(100 * watches.count(True) / len(watches), None)
+
 
 class SMBFile(models.Model):
     """A base class to provide simple attributes and interfaces needed by all media file types."""

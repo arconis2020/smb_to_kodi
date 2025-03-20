@@ -11,6 +11,32 @@ For the record, I also investigated rendering almost this entire view in Javascr
 <div class="flex-container" id="flexbase">
     <button class="collapsible default-open" id="Library_Shortname">{{ library.shortname }}</button>
     <div id="replaceme"></div>
+    <button class="collapsible" id="Edit_Library">Edit Library</button>
+    <div class="hidable">
+        <form method="post">
+        {% csrf_token %}
+        <fieldset>
+            <input type="hidden" name="library" id="library" value="{{ library.shortname }}"><br/>
+            <label for="path">Path:</label>
+            <input type="text" name="path" id="path" maxlength="255" value="{{ library.path }}"><br/>
+            <label for="prefix">Prefix:</label>
+            <input type="text" name="prefix" id="prefix" maxlength="255" value="{{ library.prefix }}"><br/>
+            <label for="servername">Servername:</label>
+            <input type="text" name="servername" id="servername" maxlength="255" value="{{ library.servername }}"><br/>
+            <p><label for="content_type">Content Type:</label>
+            <select name="content_type" id="content_type">
+                {% for ct_int, ct_name in content_types %}
+                    {% if library.content_type == ct_int %}
+                    <option value="{{ ct_int }}" selected="selected">{{ ct_name }}</option>
+                    {% else %}
+                    <option value="{{ ct_int }}">{{ ct_name }}</option>
+                    {% endif %}
+                {% endfor %}
+            </select></p>
+        </fieldset>
+        <input type="submit" value="Submit" formaction="{% url 'tv:edit_library' %}">
+        </form>
+    </div>
     <button class="collapsible" id="Delete_Library">Delete Library</button>
     <div class="hidable">
         <form method="post">

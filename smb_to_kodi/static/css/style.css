@@ -80,3 +80,7 @@ body {
 select {
     max-width: 280px;
 }
+
+.progress {
+    float: right;
+}
