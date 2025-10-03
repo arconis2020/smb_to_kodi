@@ -154,6 +154,26 @@ class Kodi:
         res = self._runit(specific_params)
         self.logger.info(f"Enabling subtitles: {res.get('result')}")
 
+    def loop_off(self):
+        """Turn looping off."""
+        playerid = self.get_active_player()
+        specific_params = {
+            "method": "Player.SetRepeat",
+            "params": {"playerid": playerid, "repeat": "off"},
+        }
+        res = self._runit(specific_params)
+        self.logger.info(f"Dropping subtitles: {res.get('result')}")
+
+    def loop_on(self):
+        """Turn looping on."""
+        playerid = self.get_active_player() or 1
+        specific_params = {
+            "method": "Player.SetRepeat",
+            "params": {"playerid": playerid, "repeat": "one"},
+        }
+        res = self._runit(specific_params)
+        self.logger.info(f"Enabling subtitles: {res.get('result')}")
+
     def add_and_play(self, filename):  # pragma: no cover
         """Add a file to the current playlist and hit play (convenience function)."""
         if self.now_playing()[0]:

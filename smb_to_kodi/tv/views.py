@@ -250,6 +250,10 @@ def kodi_control(request, shortname=None, series=None):
         k.subs_off()
     elif this_action == "subs_on":
         k.subs_on()
+    if this_action == "loop_off":
+        k.loop_off()
+    elif this_action == "loop_on":
+        k.loop_on()
     elif this_action == "next_item":
         k.next_item()
     elif this_action == "next_stream":
