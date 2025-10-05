@@ -79,8 +79,10 @@ WSGI_APPLICATION = "smb_to_kodi.wsgi.application"
 
 DATABASES = {
     "default": {
-        "ENGINE": "django.db.backends.sqlite3",
-        "NAME": BASE_DIR / "db/db.sqlite3",
+        "ENGINE": "django.db.backends.postgresql",
+        "OPTIONS": {
+            "service": "postgres",
+        }
     }
 }
 

@@ -31,7 +31,7 @@ class Library(models.Model):
         MOVIES = 1
         MUSIC = 2
 
-    path = models.CharField(max_length=255, primary_key=True)
+    path = models.CharField(primary_key=True)
     prefix = models.CharField(max_length=255)
     servername = models.CharField(max_length=255)
     shortname = models.CharField(max_length=255, unique=True, default="video")
@@ -133,7 +133,7 @@ class Series(models.Model):
         verbose_name_plural = "series"
         ordering = ["series_name"]
 
-    series_name = models.CharField(max_length=80, primary_key=True)
+    series_name = models.CharField(max_length=255, primary_key=True)
     library = models.ForeignKey(Library, on_delete=models.CASCADE)
 
     def __str__(self):
@@ -167,7 +167,7 @@ class Series(models.Model):
 class SMBFile(models.Model):
     """A base class to provide simple attributes and interfaces needed by all media file types."""
 
-    smb_path = models.CharField(max_length=200, primary_key=True)
+    smb_path = models.CharField(max_length=512, primary_key=True)
 
     class Meta:
         """Control the ordering in the admin site."""
