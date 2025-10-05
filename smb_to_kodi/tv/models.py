@@ -67,7 +67,7 @@ class Library(models.Model):
         except FileNotFoundError:
             return []
         for direntry in dirs:
-            if "@eaDir" in direntry.path:  # pragma: no cover
+            if "@eaDir" in direntry.path or "#recycle" in direntry.path:  # pragma: no cover
                 continue
             if direntry.is_dir(follow_symlinks=False):
                 yield from self.scan_for_media(direntry.path, mimetype_prefix)
