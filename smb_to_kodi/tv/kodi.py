@@ -201,3 +201,19 @@ class Kodi:
         res = self._runit(specific_params)
         action = "Enabling" if bool(passtf) else "Disabling"
         self.logger.info(f"{action} passthrough: {res.get('result')}")
+
+    def get_adjust_display_rate(self):
+        """Fetch the current state of the adjust display rate setting."""
+        specific_params = {"method": "Settings.GetSettingValue", "params": {"setting": "videoplayer.adjustrefreshrate"}}
+        res = self._runit(specific_params)
+        return res.get("result", {}).get("value", 0)
+
+    def set_adjust_display_rate(self, adjusttf):
+        """Enable or disable adjusting the display rate based on the True/False of the adjusttf argument."""
+        specific_params = {
+            "method": "Settings.SetSettingValue",
+            "params": {"setting": "videoplayer.adjustrefreshrate", "value": 2 if bool(adjusttf) else 0},
+        }
+        res = self._runit(specific_params)
+        action = "Enabling" if bool(adjusttf) else "Disabling"
+        self.logger.info(f"{action} adjust display rate: {res.get('result')}")

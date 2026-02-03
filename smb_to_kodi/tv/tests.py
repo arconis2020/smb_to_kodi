@@ -1,4 +1,5 @@
 """All unit tests for the tv app."""
+from time import sleep
 from unittest.mock import call, patch
 import os
 import tempfile
@@ -413,6 +414,7 @@ class KodiControlView(TestCase):
         """
         # Step 1: Test the presence of various elements.
         mock_kodi.get_audio_passthrough.return_value = True
+        mock_kodi.get_adjust_display_rate.return_value = 2
         response = self.client.get(reverse("tv:kodi_control_standalone"))
         self.assertIn(response.status_code, [200, 302])
 
@@ -447,6 +449,7 @@ class TvSeriesDetailViewTests(TestCase):
         # Must be a single test to avoid race conditions with data.
         # Step 1: Test the presence of various elements.
         mock_kodi.get_audio_passthrough.return_value = True
+        mock_kodi.get_adjust_display_rate.return_value = 0
         response = self.client.get(reverse("tv:episodes", args=("testlib5", self.testser.series_name)))
         self.assertIn(response.status_code, [200, 302])
         for chkstr in [
@@ -456,6 +459,7 @@ class TvSeriesDetailViewTests(TestCase):
             "All Episodes",
             "Kodi Control",
             "Disable audio passthrough",
+            "Disable adjust display rate",
         ]:
             self.assertContains(response, chkstr)
         # Step 3a: Submit the form action to load the episodes.
@@ -526,6 +530,7 @@ class TvSeriesDetailViewTests(TestCase):
             ("next_item", call().next_item()),
             ("next_stream", call().next_stream()),
             ("passthrough", call().set_audio_passthrough(False)),
+            ("adjust_display_rate", call().set_adjust_display_rate(2)),
         ]
         for action in action_list:
             expected_call = action[1]
@@ -566,6 +571,7 @@ class MusicViewTests(LiveServerTestCase):
         cls.folder_names = [os.path.basename(x.name) for x in cls.dfac.series]
         cls.selenium = WebDriver()
         cls.selenium.implicitly_wait(10)
+        sleep(3)
 
     @classmethod
     def tearDownClass(cls):
@@ -580,7 +586,7 @@ class MusicViewTests(LiveServerTestCase):
         # Wait for the paras to be added.
         _ = WebDriverWait(self.selenium, timeout=3).until(lambda d: d.find_element(By.TAG_NAME, "p"))
         # Step 1: Check for expected buttons.
-        exp_buttons = [self.testlib.shortname, "Delete Library"] + self.folder_names
+        exp_buttons = [self.testlib.shortname, "Delete Library", "Edit Library"] + self.folder_names
         cur_buttons = self.selenium.find_elements(By.CLASS_NAME, "collapsible")
         subtexts = [s.text for s in cur_buttons]
         self.assertEqual(set(subtexts), set(exp_buttons))
@@ -633,7 +639,7 @@ class MovieViewTests(LiveServerTestCase):
         # Wait for the paras to be added.
         _ = WebDriverWait(self.selenium, timeout=3).until(lambda d: d.find_element(By.TAG_NAME, "p"))
         # Step 1: Check for expected buttons.
-        exp_buttons = [self.testlib.shortname, "Delete Library"] + self.folder_names
+        exp_buttons = [self.testlib.shortname, "Delete Library", "Edit Library"] + self.folder_names
         cur_buttons = self.selenium.find_elements(By.CLASS_NAME, "collapsible")
         subtexts = [s.text for s in cur_buttons]
         self.assertEqual(set(subtexts), set(exp_buttons))
@@ -648,9 +654,9 @@ class MovieViewTests(LiveServerTestCase):
         self.assertEqual([p.get_attribute("value") for p in play_buttons], exp_button_vals)
         # Step 4: Check for last watched spans.
         spans = self.selenium.find_elements(By.TAG_NAME, "span")
-        exp_date = f"  {timezone.localtime():%Y-%m-%d}"
+        exp_date = f"  {timezone.localtime():%Y-%m}"
         dates = [x.get_attribute("innerHTML") for x in spans]
-        dates = [d for d in dates if d == exp_date]
+        dates = [d for d in dates if d.startswith(exp_date)]
         self.assertEqual(len(dates), len(self.dfac.episodes))
 
 
@@ -871,6 +877,45 @@ class KodiTests(TestCase):
         mock_post.return_value.status_code = 200
         mock_post.return_value.json.return_value = {"id": "1", "jsonrpc": "2.0"}
         self.assertFalse(self.kodi.get_audio_passthrough())
+
+    def test_set_adjust_display_rate(self, mock_post):
+        """Test that the set_adjust_display_rate function logs as expected."""
+        # Step 1: Test that we get the good log entry when connected.
+        self.log_with_connection(
+            mock_post, self.kodi.set_adjust_display_rate, (True,), ["INFO:django:Enabling adjust display rate: OK"]
+        )
+        # Step 2: Test that we get the good log entry when connected and trying to disable adjusting
+        self.log_with_connection(
+            mock_post, self.kodi.set_adjust_display_rate, (False,), ["INFO:django:Disabling adjust display rate: OK"]
+        )
+        # Step 3: Test that we get the bad log entry when not connected.
+        self.log_without_connection(
+            mock_post,
+            self.kodi.set_adjust_display_rate,
+            (True,),
+            ["INFO:django:Enabling adjust display rate: {'connection': False}"],
+        )
+
+    def test_get_adjust_display_rate(self, mock_post):
+        """Test that the get_adjust_display_rate function returns expected integers."""
+        # Step 1: Test that we get 2 when adjusting is enabled.
+        mock_post.return_value.status_code = 200
+        mock_post.return_value.json.return_value = {"id": "1", "jsonrpc": "2.0", "result": {"value": 2}}
+        self.assertEqual(self.kodi.get_adjust_display_rate(), 2)
+        # Step 2: Test that we get 0 when adjusting is disabled.
+        mock_post.reset_mock(return_value=True, side_effect=True)
+        mock_post.return_value.status_code = 200
+        mock_post.return_value.json.return_value = {"id": "1", "jsonrpc": "2.0", "result": {"value": 0}}
+        self.assertEqual(self.kodi.get_adjust_display_rate(), 0)
+        # Step 3: Test that we get 0 when there is no connection.
+        mock_post.reset_mock(return_value=True, side_effect=True)
+        mock_post.side_effect = ConnectionError("Not Connected.")
+        self.assertEqual(self.kodi.get_adjust_display_rate(), 0)
+        # Step 4: Test that we get 0 when Kodi returns NO result (adjust is N/A).
+        mock_post.reset_mock(return_value=True, side_effect=True)
+        mock_post.return_value.status_code = 200
+        mock_post.return_value.json.return_value = {"id": "1", "jsonrpc": "2.0"}
+        self.assertEqual(self.kodi.get_adjust_display_rate(), 0)
 
 
 class AdminFunctionTests(TestCase):

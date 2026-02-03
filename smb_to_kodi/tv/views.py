@@ -88,6 +88,7 @@ def series_detail(request, shortname, series):
     next_episode = unwatched[0] if bool(unwatched) else "No episodes loaded"
     random_episode = choice(unwatched) if bool(unwatched) else "No episodes loaded"
     current_passthrough = Kodi().get_audio_passthrough()
+    current_adjust_display_rate = Kodi().get_adjust_display_rate()
     return render(
         request,
         "tv/series_detail.html",
@@ -99,6 +100,7 @@ def series_detail(request, shortname, series):
             "shortname": shortname,
             "eplist": this_series,
             "passthrough_state": current_passthrough,
+            "adjust_display_rate_state": current_adjust_display_rate,
         },
     )
 
@@ -231,6 +233,7 @@ def mark_watched_up_to(request, shortname, series):
 def kodi_control_standalone(request):
     """Show the simple standalone Kodi control form."""
     current_passthrough = Kodi().get_audio_passthrough()
+    current_adjust_display_rate = Kodi().get_adjust_display_rate()
     return render(
         request,
         "tv/kodi_control.html",
@@ -238,6 +241,7 @@ def kodi_control_standalone(request):
             "series_name": None,
             "shortname": None,
             "passthrough_state": current_passthrough,
+            "adjust_display_rate_state": current_adjust_display_rate,
         },
     )
 
@@ -261,6 +265,9 @@ def kodi_control(request, shortname=None, series=None):
     elif this_action == "passthrough":
         # The page essentially gives you the option to toggle, so let's do that here.
         k.set_audio_passthrough(not k.get_audio_passthrough())
+    elif this_action == "adjust_display_rate":
+        # The page essentially gives you the option to toggle, so let's do that here.
+        k.set_adjust_display_rate(0 if k.get_adjust_display_rate() == 2 else 2)
     if all([bool(shortname), bool(series), shortname != "None", series != "None"]):
         return HttpResponseRedirect(reverse("tv:episodes", args=(shortname, series)))
     return HttpResponseRedirect(request.META["HTTP_REFERER"])  # pragma: no cover - safe fallback only.
